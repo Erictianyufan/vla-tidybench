@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-train drawer-policy-smoke drawer-demo extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
+.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-train drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
@@ -73,6 +73,16 @@ drawer-policy-smoke:
 	OPENPI_CUDA_VISIBLE_DEVICES=$${POLICY_GPU:-1} ./scripts/run_openpi.sh scripts/smoke_drawer_policy.py \
 		--checkpoint /home/ubuntu/data/vla-tidybench/checkpoints/openpi-runs/pi05_tidybench_drawer_lora/drawer-smoke/1 \
 		--dataset /home/ubuntu/data/vla-tidybench/raw/drawer_open_smoke.hdf5
+
+drawer-policy-serve:
+	@test -n "$(CHECKPOINT)" || (echo "usage: make drawer-policy-serve CHECKPOINT=/abs/checkpoint" >&2; exit 2)
+	OPENPI_CUDA_VISIBLE_DEVICES=$${POLICY_GPU:-1} ./scripts/run_openpi.sh scripts/serve_drawer_policy.py \
+		--checkpoint "$(CHECKPOINT)" --port $${POLICY_PORT:-8000}
+
+drawer-policy-run:
+	./scripts/run_isaac.sh scripts/run_drawer_pi05_closed_loop.py \
+		--device cuda:0 --enable_cameras --viz $${VIZ:-none} --port $${POLICY_PORT:-8000} \
+		--output $${OUTPUT:-/home/ubuntu/data/vla-tidybench/eval/pi05_open_closed_loop.hdf5}
 
 drawer-demo:
 	FFMPEG_BIN=$$(./scripts/run_openpi.sh -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())') \

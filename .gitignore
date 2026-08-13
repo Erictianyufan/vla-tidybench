@@ -31,6 +31,9 @@ results/metrics/*.jsonl
 *.mkv
 *.avi
 
+# One small, explicitly labeled presentation preview is published with the docs.
+!docs/media/vla-tidybench-new-scene-preview.mp4
+
 # Credentials and host-specific access material.
 *.pem
 *.key

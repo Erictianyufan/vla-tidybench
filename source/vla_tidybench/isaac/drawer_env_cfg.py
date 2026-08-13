@@ -9,7 +9,7 @@ the policy observation group.
 from __future__ import annotations
 
 import isaaclab.sim as sim_utils
-from isaaclab.assets import ArticulationCfg, RigidObjectCfg
+from isaaclab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import SceneEntityCfg
@@ -168,3 +168,68 @@ class TidyBenchDrawerEnvCfg(FrankaCabinetEnvCfg):
             event_cfg.cabinet_physics_material = None
             event_cfg.reset_robot_joints = None
             event_cfg.reset_all.params = {"reset_joint_targets": True}
+
+
+@configclass
+class TidyBenchDrawerShowcaseEnvCfg(TidyBenchDrawerEnvCfg):
+    """Presentation scene; extra cameras and props never enter policy input."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        asset_root = "/home/ubuntu/readonly/Assets/Isaac/4.5/Isaac"
+        self.scene.room = AssetBaseCfg(
+            prim_path="{ENV_REGEX_NS}/ShowcaseRoom",
+            spawn=sim_utils.UsdFileCfg(
+                usd_path=f"{asset_root}/Environments/Simple_Room/simple_room.usd",
+                scale=(1.0, 1.0, 1.0),
+            ),
+            # Offset the visual room so its built-in table does not intersect
+            # the task table. The room is presentation-only and collision is
+            # disabled to keep policy physics identical to training.
+            init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, -0.75)),
+        )
+        # Static presentation props are kept outside the Franka work corridor.
+        self.scene.banana = AssetBaseCfg(
+            prim_path="{ENV_REGEX_NS}/Decor/Banana",
+            spawn=sim_utils.UsdFileCfg(
+                usd_path=f"{asset_root}/Props/YCB/Axis_Aligned/011_banana.usd",
+                scale=(0.65, 0.65, 0.65),
+            ),
+            init_state=AssetBaseCfg.InitialStateCfg(pos=(0.30, 0.32, 0.04)),
+        )
+        self.scene.bowl = AssetBaseCfg(
+            prim_path="{ENV_REGEX_NS}/Decor/Bowl",
+            spawn=sim_utils.UsdFileCfg(
+                usd_path=f"{asset_root}/Props/YCB/Axis_Aligned/024_bowl.usd",
+                scale=(0.65, 0.65, 0.65),
+            ),
+            init_state=AssetBaseCfg.InitialStateCfg(pos=(0.55, 0.37, 0.035)),
+        )
+        self.scene.mug = AssetBaseCfg(
+            prim_path="{ENV_REGEX_NS}/Decor/Mug",
+            spawn=sim_utils.UsdFileCfg(
+                usd_path=f"{asset_root}/Props/YCB/Axis_Aligned/025_mug.usd",
+                scale=(0.65, 0.65, 0.65),
+            ),
+            init_state=AssetBaseCfg.InitialStateCfg(pos=(0.72, 0.34, 0.05)),
+        )
+        # Same viewing direction as the audited table camera, pulled back to
+        # include the complete Franka, cabinet, tabletop, and room context.
+        self.scene.hero_cam = CameraCfg(
+            prim_path="{ENV_REGEX_NS}/hero_cam",
+            update_period=0.0,
+            height=720,
+            width=1280,
+            data_types=["rgb"],
+            spawn=sim_utils.PinholeCameraCfg(
+                focal_length=28.0,
+                focus_distance=400.0,
+                horizontal_aperture=24.0,
+                clipping_range=(0.1, 8.0),
+            ),
+            offset=CameraCfg.OffsetCfg(
+                pos=(2.35, -1.75, 1.70),
+                rot=(-0.494, -0.760, 0.350, 0.230),
+                convention="ros",
+            ),
+        )

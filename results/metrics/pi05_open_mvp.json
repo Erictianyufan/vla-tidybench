@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "task": "open_the_top_drawer",
+  "dataset": {
+    "successful_episodes": 8,
+    "frames": 1092,
+    "fps": 20
+  },
+  "training": {
+    "model": "pi0.5_flow_matching_lora",
+    "steps": 500,
+    "batch_size": 2,
+    "fsdp_devices": 2,
+    "final_loss": 0.0316
+  },
+  "deployment": {
+    "checkpoint_step": 499,
+    "seed": 2026,
+    "max_control_steps": 240,
+    "execute_steps_per_chunk": 4,
+    "warm_inference_ms_approx": 96,
+    "drawer_open_threshold_m": 0.3,
+    "success": false,
+    "final_drawer_position_m_approx": 0.0
+  },
+  "claim": "Training and real policy closed-loop execution completed; the small-data policy did not pass the OPEN success gate."
+}
