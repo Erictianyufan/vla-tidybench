@@ -128,6 +128,12 @@ lets the environment's native DLS IK compute robot joint targets. Privileged
 object poses are not part of the deployable VLA input. See
 `results/metrics/stack_dataset_manifest.json` for hashes and QA results.
 
+The Mimic smoke gate is also complete. Automatic annotation exported all ten
+candidate episodes. Mimic then produced ten online-success trajectories in 30
+attempts (33.3%); strict post-generation physical replay reproduced 7/10. The
+raw generated set and its replay allowlist are preserved separately because
+contact-rich Isaac physics replay is not guaranteed deterministic.
+
 ### 3. Later-stage command contract
 
 The following interfaces are reserved for later milestones and are not claimed

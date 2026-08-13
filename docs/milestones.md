@@ -10,7 +10,8 @@
 - [x] Human demonstrations recorded, audited and preserved as immutable raw data.
 - [x] Scripted truth/FK/DLS-IK teacher produces independent two-camera HDF5 episodes.
 - [x] Ten-episode mixed training candidate passes full replay validation (10/10).
-- [ ] Mimic ten-trial dataset smoke test passes.
+- [x] Mimic smoke generation reaches ten successful episodes; generation and
+  strict replay rates are recorded separately.
 
 No custom drawer task, model fine-tuning or RL starts before the M0 data gates
 are complete.

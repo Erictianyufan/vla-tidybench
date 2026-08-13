@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-13T18:51:00+08:00",
+  "generated_at": "2026-08-13T19:24:00+08:00",
   "environment": "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
   "control_hz": 20,
   "action": "7D IK-relative task space plus binary gripper",
@@ -29,10 +29,37 @@
     "initial_batch_strict_replay": "6/7",
     "replacement_strict_replay": "2/2"
   },
+  "mimic_annotation": {
+    "path": "/home/ubuntu/data/vla-tidybench/raw/stack_annotated.hdf5",
+    "sha256": "29ffa12ba849661867c2f4cf2311eb1cda52362e39f77cec2e6150473252644e",
+    "episodes_exported": 10,
+    "task_completions": "10/10",
+    "bytes": 351938061,
+    "required_datagen_fields_present": true,
+    "subtask_term_signals": ["grasp_1", "stack_1", "grasp_2"]
+  },
+  "mimic_smoke": {
+    "path": "/home/ubuntu/data/vla-tidybench/raw/stack_mimic_smoke.hdf5",
+    "sha256": "2cafa9e6ef563de29f14527b3f4428af5141a37dca6bc3c267a03ab0eebf321e",
+    "successful_episodes": 10,
+    "generation_attempts": 30,
+    "generation_success_rate": 0.3333333333,
+    "steps": 3170,
+    "strict_replay": "7/10",
+    "strict_replay_failed_episode_indices": [2, 4, 8],
+    "accepted_subset_path": "/home/ubuntu/data/vla-tidybench/raw/stack_mimic_smoke_accepted_7.hdf5",
+    "accepted_subset_sha256": "3f6fd4bab635310cff9a23438fdc6fd6c88a2d3711ad5dfcc1637c9f7113f94d",
+    "accepted_source_episode_indices": [0, 1, 3, 5, 6, 7, 9],
+    "accepted_episodes": 7,
+    "accepted_steps": 2192,
+    "accepted_subset_independent_replay": "7/7",
+    "note": "Generation success and later physical replay are separate checks; Isaac physics replay is not guaranteed deterministic."
+  },
   "quality_notes": [
     "Raw files are preserved and are not tracked by Git.",
     "The HDF5 format_version root attribute is preserved during merge.",
     "Two 200x200 uint8 RGB streams are present in every accepted episode.",
-    "Excluded episodes remain available for failure analysis only."
+    "Excluded episodes remain available for failure analysis only.",
+    "Mimic generation output is preserved separately from its replay-validated subset."
   ]
 }

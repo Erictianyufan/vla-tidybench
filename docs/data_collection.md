@@ -80,3 +80,39 @@ full 10/10 replay.
 
 This filtering does not delete raw episodes. It records the accepted provenance
 inside the merged HDF5 and in the checked-in dataset manifest.
+
+## Mimic annotation and generation smoke
+
+The replay-validated ten-episode candidate was automatically annotated with
+Isaac Lab Mimic. All ten episodes completed during annotation and contain the
+required end-effector, object, target-pose and `grasp_1`, `stack_1`, `grasp_2`
+termination-signal fields.
+
+```bash
+cd /home/ubuntu/mycode/vla-tidybench
+make annotate
+NUM_ENVS=4 make mimic-smoke
+./scripts/replay_stack_demos.sh \
+  /home/ubuntu/data/vla-tidybench/raw/stack_mimic_smoke.hdf5
+```
+
+The smoke generator required 30 attempts to produce ten online-success
+episodes (33.3%). A later strict physical replay reproduced 7/10; episode IDs
+2, 4 and 8 did not reproduce. These are separate metrics: Mimic exports an
+episode only after its online success predicate passes, while a later reset and
+replay is not guaranteed to follow the exact same contact dynamics.
+
+The original ten generated episodes remain immutable. A seven-episode subset
+records the first replay allowlist without deleting or relabelling the three
+non-repeatable trajectories. That accepted subset passed a second independent
+strict replay at 7/7:
+
+```bash
+/home/ubuntu/env_isaaclab/bin/python scripts/merge_stack_datasets.py \
+  --source '/home/ubuntu/data/vla-tidybench/raw/stack_mimic_smoke.hdf5::0,1,3,5,6,7,9::mimic_replay_validated' \
+  --output /home/ubuntu/data/vla-tidybench/raw/stack_mimic_smoke_accepted_7.hdf5 \
+  --overwrite
+```
+
+This is a smoke-test dataset, not the final training corpus. The checked-in
+manifest is the source of truth for hashes, counts and QA decisions.
