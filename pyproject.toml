@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Simulation-first pi0.5 Franka manipulation benchmark"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.26"]
+dependencies = ["msgpack>=1.0.5", "numpy>=1.26", "websockets>=11"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.9"]
