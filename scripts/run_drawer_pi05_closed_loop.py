@@ -23,6 +23,7 @@ parser.add_argument("--seed", type=int, default=2026)
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--showcase", action="store_true", help="add room, props, and 720p hero camera")
 parser.add_argument("--teacher-preview", action="store_true", help="use the scripted OPEN teacher for camera QA")
+parser.add_argument("--teacher-skill", choices=("open", "pick", "place", "close"), default="open")
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 app_launcher = AppLauncher(args_cli)
@@ -60,6 +61,11 @@ def main() -> int:
     cfg = TidyBenchDrawerShowcaseEnvCfg() if args_cli.showcase else TidyBenchDrawerEnvCfg()
     cfg.sim.device = args_cli.device
     cfg.scene.num_envs = 1
+    if args_cli.teacher_preview and args_cli.teacher_skill in ("place", "close"):
+        cfg.scene.cabinet.init_state.joint_pos["drawer_top_joint"] = 0.36
+    if args_cli.teacher_preview and args_cli.teacher_skill == "place":
+        cfg.scene.cabinet.actuators["drawers"].stiffness = 10000.0
+        cfg.scene.cabinet.actuators["drawers"].damping = 500.0
     env = gym.make("Isaac-Open-Drawer-Franka-IK-Rel-v0", cfg=cfg).unwrapped
     drawer_idx = env.scene["cabinet"].find_joints("drawer_top_joint")[0][0]
     adapter = ActionAdapter()
@@ -89,7 +95,8 @@ def main() -> int:
         teacher_actions = None
         teacher_index = 0
         if args_cli.teacher_preview:
-            with h5py.File("/home/ubuntu/data/vla-tidybench/raw/drawer_open_smoke.hdf5", "r") as demo_file:
+            demo_path = f"/home/ubuntu/data/vla-tidybench/raw/drawer_{args_cli.teacher_skill}_smoke.hdf5"
+            with h5py.File(demo_path, "r") as demo_file:
                 demo = demo_file["data"][sorted(demo_file["data"].keys())[0]]
                 teacher_actions = np.asarray(demo["actions"], dtype=np.float32)
         try:
@@ -127,8 +134,17 @@ def main() -> int:
                     actions_executed.append(physical.copy())
                     step += 1
                     drawer = float(env.scene["cabinet"].data.joint_pos.torch[0, drawer_idx])
-                    if drawer >= 0.30:
-                        success = True
+                    obj = env.scene["target_object"].data.root_pos_w.torch[0]
+                    if args_cli.teacher_skill == "open":
+                        success = drawer >= 0.30
+                    elif args_cli.teacher_skill == "pick":
+                        success = float(obj[2]) >= 0.12
+                    elif args_cli.teacher_skill == "place":
+                        handle_x = env.scene["cabinet_frame"].data.target_pos_w.torch[0, 0, 0]
+                        success = bool(obj[2] > 0.68 and obj[2] < 0.86 and obj[0] > handle_x + 0.023 and abs(obj[1]) < 0.26)
+                    elif args_cli.teacher_skill == "close":
+                        teacher_length = 0 if teacher_actions is None else len(teacher_actions)
+                        success = drawer <= 0.04 and step >= min(40, teacher_length)
                         break
                 print(
                     f"step={step} drawer={drawer:.3f} infer_ms={latencies[-1]:.1f} success={success}",
@@ -143,6 +159,7 @@ def main() -> int:
             output.attrs["format_version"] = 1
             output.attrs["policy"] = "scripted-teacher-camera-preview" if teacher_actions is not None else "pi0.5-drawer-lora"
             output.attrs["prompt"] = args_cli.prompt
+            output.attrs["skill"] = args_cli.teacher_skill if teacher_actions is not None else "open"
             output.attrs["success"] = success
             output.attrs["mean_infer_ms"] = float(np.mean(latencies)) if latencies else -1.0
             output.create_dataset("table_cam", data=np.asarray(frames_table), compression="gzip")

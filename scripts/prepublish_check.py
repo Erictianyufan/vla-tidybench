@@ -13,6 +13,11 @@ SELF = Path(__file__).resolve()
 MAX_TRACKED_BYTES = 25 * 1024 * 1024
 MAX_PREVIEW_BYTES = 10 * 1024 * 1024
 
+ALLOWED_DEMO_VIDEOS = {
+    Path("docs/media/vla-tidybench-final-project.mp4"),
+    Path("docs/media/vla-tidybench-new-scene-preview.mp4"),
+}
+
 BLOCKED_SUFFIXES = {
     ".avi",
     ".ckpt",
@@ -66,7 +71,7 @@ def inspect_file(path: Path) -> list[str]:
     suffix = path.suffix.lower()
     size = path.stat().st_size
 
-    if suffix in BLOCKED_SUFFIXES:
+    if suffix in BLOCKED_SUFFIXES and relative not in ALLOWED_DEMO_VIDEOS:
         findings.append(f"blocked artifact type: {relative}")
     if size > MAX_TRACKED_BYTES:
         findings.append(f"tracked file exceeds 25 MiB: {relative} ({size} bytes)")
