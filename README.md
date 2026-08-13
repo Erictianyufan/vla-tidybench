@@ -178,9 +178,7 @@ results/metrics/         小型、可版本化的 manifest/指标
 artifacts/               不进入 Git 的视频与发布产物
 ```
 
-## 诚实复现声明
-
-本仓库证明的是完整工程链路和模块化设计，不声称：
+本仓库证明的是完整工程链路和模块化设计，用作个人学习，并不声称：
 
 - 2-step LoRA checkpoint 已学会抽屉任务；
 - scripted teacher Demo 是 VLA 闭环结果；
