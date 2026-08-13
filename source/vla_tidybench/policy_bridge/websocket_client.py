@@ -39,7 +39,7 @@ class PolicyClient:
     def close(self) -> None:
         self._connection.close()
 
-    def __enter__(self) -> "PolicyClient":
+    def __enter__(self) -> PolicyClient:
         return self
 
     def __exit__(self, *_exc_info) -> None:

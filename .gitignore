@@ -4,10 +4,38 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .env
+.env.*
+!.env.example
 data/
 datasets/
 checkpoints/
 logs/
 results/videos/
 results/metrics/*.jsonl
+artifacts/
 
+# Never commit raw demonstrations, model weights or RL replay buffers.
+*.h5
+*.hdf5
+*.npz
+*.tfrecord
+*.ckpt
+*.safetensors
+*.orbax
+*.pt
+*.pth
+
+# Full videos belong in the private GitHub Release, not Git history.
+*.mp4
+*.mov
+*.mkv
+*.avi
+
+# Credentials and host-specific access material.
+*.pem
+*.key
+*.p12
+id_rsa*
+id_ed25519*
+credentials*
+secrets*

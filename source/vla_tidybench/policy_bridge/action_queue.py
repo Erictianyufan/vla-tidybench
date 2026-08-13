@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from collections import deque
 from dataclasses import dataclass
-import time
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -18,7 +18,7 @@ class ActionChunk:
     actions: NDArray[np.float32]
 
     @classmethod
-    def create(cls, episode_id: str, observation_step: int, actions: ArrayLike) -> "ActionChunk":
+    def create(cls, episode_id: str, observation_step: int, actions: ArrayLike) -> ActionChunk:
         array = np.asarray(actions, dtype=np.float32)
         if array.ndim != 2 or array.shape[1] != 7 or array.shape[0] < 1:
             raise ValueError(f"Expected action chunk [H, 7], got {array.shape}")

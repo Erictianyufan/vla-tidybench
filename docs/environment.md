@@ -4,7 +4,7 @@ Audit date: 2026-08-13 (Asia/Shanghai)
 
 ## Hardware
 
-- Host: `10-60-206-160`
+- Host: cloud instance identifier omitted from the repository
 - GPU: 2 x NVIDIA GeForce RTX 4090, 24564 MiB each
 - GPU topology: PHB, no NVLink; memory is not pooled
 - CPU: AMD EPYC 7542, 16 physical / 32 logical cores
@@ -36,4 +36,3 @@ action space and the expected Franka joints and end-effector body.
 
 The vendor launcher must be run after activating `/home/ubuntu/env_isaaclab`.
 Otherwise it falls back to Ubuntu's Python 3.10 and fails before simulation.
-

@@ -5,15 +5,13 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import gymnasium as gym
-import torch
-
 import isaaclab_tasks  # noqa: F401
+import torch
 from isaaclab_tasks.utils import add_launcher_args, launch_simulation, resolve_task_config, setup_preset_cli
-
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--task", required=True)

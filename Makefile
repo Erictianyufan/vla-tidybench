@@ -1,12 +1,12 @@
 SHELL := /bin/bash
 
-.PHONY: doctor test sim-smoke sim-camera-smoke protocol-smoke record replay annotate mimic-smoke
+.PHONY: doctor test sim-smoke sim-camera-smoke protocol-smoke record replay annotate mimic-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
 
 test:
-	/home/ubuntu/env_isaaclab/bin/python -m pytest tests
+	PYTHONPATH=source /home/ubuntu/env_isaaclab/bin/python -m pytest tests
 
 sim-smoke:
 	./scripts/run_isaac.sh scripts/isaac_smoke.py \
@@ -36,3 +36,10 @@ annotate:
 
 mimic-smoke:
 	./scripts/generate_stack_mimic_smoke.sh
+
+package-demo:
+	@test -n "$(INPUT)" || (echo "usage: make package-demo INPUT=/absolute/path/to/raw.mp4" >&2; exit 2)
+	./scripts/package_demo.sh "$(INPUT)"
+
+prepublish:
+	/home/ubuntu/env_isaaclab/bin/python scripts/prepublish_check.py --require-clean

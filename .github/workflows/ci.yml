@@ -1,0 +1,27 @@
+name: unit-and-protocol-contract
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependency-light test environment
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Unit tests
+        run: pytest
+      - name: Static checks
+        run: ruff check .
+      - name: Tracked-file security audit
+        run: python scripts/prepublish_check.py

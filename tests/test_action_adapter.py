@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from vla_tidybench.policy_bridge import ActionAdapter
 
 
