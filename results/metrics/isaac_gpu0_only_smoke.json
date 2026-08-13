@@ -1,0 +1,74 @@
+{
+  "action_shape": [
+    1,
+    7
+  ],
+  "device": "cuda:0",
+  "num_envs": 1,
+  "num_steps": 2,
+  "observation_shapes": {
+    "policy": {
+      "actions": [
+        1,
+        7
+      ],
+      "cube_orientations": [
+        1,
+        12
+      ],
+      "cube_positions": [
+        1,
+        9
+      ],
+      "eef_pos": [
+        1,
+        3
+      ],
+      "eef_quat": [
+        1,
+        4
+      ],
+      "gripper_pos": [
+        1,
+        2
+      ],
+      "joint_pos": [
+        1,
+        9
+      ],
+      "joint_vel": [
+        1,
+        9
+      ],
+      "object": [
+        1,
+        39
+      ],
+      "table_cam": [
+        1,
+        200,
+        200,
+        3
+      ],
+      "wrist_cam": [
+        1,
+        200,
+        200,
+        3
+      ]
+    },
+    "subtask_terms": {
+      "grasp_1": [
+        1
+      ],
+      "grasp_2": [
+        1
+      ],
+      "stack_1": [
+        1
+      ]
+    }
+  },
+  "status": "passed",
+  "task": "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0"
+}

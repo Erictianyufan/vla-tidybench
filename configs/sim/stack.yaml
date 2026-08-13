@@ -1,0 +1,15 @@
+task: Isaac-Stack-Cube-Franka-IK-Rel-v0
+visuomotor_task: Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0
+device: cuda:0
+num_envs: 1
+sim_dt_s: 0.01
+decimation: 5
+policy_dt_s: 0.05
+policy_hz: 20
+action_dim: 7
+ik_relative_scale: 0.5
+end_effector_body: panda_hand
+end_effector_offset_m: [0.0, 0.0, 0.107]
+quaternion_order: xyzw
+cameras: [table_cam, wrist_cam]
+
