@@ -55,6 +55,24 @@
     "accepted_subset_independent_replay": "7/7",
     "note": "Generation success and later physical replay are separate checks; Isaac physics replay is not guaranteed deterministic."
   },
+  "openpi_smoke": {
+    "repo_id": "erictianyufan/vla_tidybench_stack_m1_smoke",
+    "openpi_commit": "15a9616a00943ada6c20a0f158e3adb39df2ccac",
+    "lerobot_version": "0.1.0",
+    "episodes": 17,
+    "frames": 5554,
+    "fps": 20,
+    "state_dim": 18,
+    "action_dim": 7,
+    "action_horizon": 16,
+    "privileged_policy_inputs": false,
+    "norm_stats_sha256": "0d7b005101e00a7b59886f8ae33094138428b6af503c66e78ceca16041a76567",
+    "single_gpu_24gb": "checkpoint restore passed; first backward step OOM requesting 5.37 GiB",
+    "two_gpu_fsdp": "2/2 optimizer steps completed and checkpoint finalized",
+    "smoke_losses": [1.6990, 1.9058],
+    "checkpoint_path": "/home/ubuntu/data/vla-tidybench/checkpoints/openpi-runs/pi05_tidybench_stack_lora/smoke_fsdp2_20260813/1",
+    "result_scope": "systems smoke only; not a trained or evaluated policy"
+  },
   "quality_notes": [
     "Raw files are preserved and are not tracked by Git.",
     "The HDF5 format_version root attribute is preserved during merge.",

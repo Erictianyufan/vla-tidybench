@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: doctor test sim-smoke sim-camera-smoke protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke package-demo prepublish
+.PHONY: doctor test sim-smoke sim-camera-smoke protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
@@ -46,6 +46,25 @@ annotate:
 
 mimic-smoke:
 	./scripts/generate_stack_mimic_smoke.sh
+
+convert-openpi-smoke:
+	./scripts/run_openpi.sh scripts/convert_stack_to_lerobot.py \
+		--config configs/data/stack_m1_smoke.json \
+		--data-root /home/ubuntu/data/vla-tidybench/raw \
+		--overwrite
+
+openpi-norm-stats:
+	./scripts/run_openpi.sh scripts/compute_stack_norm_stats.py
+
+openpi-data-smoke:
+	./scripts/run_openpi.sh scripts/smoke_openpi_batch.py --batch-size 1
+
+train-pi05-smoke:
+	OPENPI_CUDA_VISIBLE_DEVICES=$${OPENPI_CUDA_VISIBLE_DEVICES:-0,1} \
+	./scripts/run_openpi.sh scripts/train_stack_pi05_smoke.py \
+		--steps $${STEPS:-2} --batch-size $${BATCH_SIZE:-2} \
+		--fsdp-devices $${FSDP_DEVICES:-2} \
+		--exp-name $${EXP_NAME:-smoke} --overwrite
 
 package-demo:
 	@test -n "$(INPUT)" || (echo "usage: make package-demo INPUT=/absolute/path/to/raw.mp4" >&2; exit 2)

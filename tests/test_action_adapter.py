@@ -11,13 +11,19 @@ def test_physical_isaac_roundtrip_inside_limits():
 
 def test_adapter_clips_and_binarizes():
     adapted = ActionAdapter().to_isaac([1, -1, 0, 2, -2, 0, 0.2])
-    np.testing.assert_allclose(adapted[:3], [0.05, -0.05, 0.0])
-    np.testing.assert_allclose(adapted[3:6], [0.24, -0.24, 0.0])
+    np.testing.assert_allclose(adapted[:3], [0.3, -0.3, 0.0])
+    np.testing.assert_allclose(adapted[3:6], [1.0, -1.0, 0.0])
     assert adapted[6] == 1.0
+
+
+def test_recorded_action_batch_uses_the_same_scale():
+    raw = np.array([[0.2, -0.1, 0.0, 0.4, 0.0, -0.2, -0.1]], dtype=np.float32)
+    physical = ActionAdapter().from_isaac_batch(raw)
+    np.testing.assert_allclose(physical[0, :6], raw[0, :6] * 0.5)
+    assert physical[0, 6] == -1.0
 
 
 @pytest.mark.parametrize("bad", ([0] * 6, [0] * 8, [0, 0, 0, 0, 0, np.nan, 1]))
 def test_adapter_rejects_bad_actions(bad):
     with pytest.raises(ValueError):
         ActionAdapter().to_isaac(bad)
-

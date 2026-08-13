@@ -116,6 +116,10 @@ make scripted-collect
   /home/ubuntu/data/vla-tidybench/raw/stack_train_candidate_10.hdf5
 make annotate
 make mimic-smoke
+make convert-openpi-smoke
+make openpi-norm-stats
+make openpi-data-smoke
+make train-pi05-smoke
 ```
 
 Replay is a required data-quality gate. Joint-position demonstrations must not
@@ -133,6 +137,12 @@ candidate episodes. Mimic then produced ten online-success trajectories in 30
 attempts (33.3%); strict post-generation physical replay reproduced 7/10. The
 raw generated set and its replay allowlist are preserved separately because
 contact-rich Isaac physics replay is not guaranteed deterministic.
+
+The M1 smoke dataset currently combines the ten-episode baseline and seven
+independently replay-validated Mimic episodes: 17 episodes, 5,554 frames at
+20 Hz. The converter exposes only two RGB images, an 18D joint position/velocity
+state, language and canonical 7D actions. A two-step π0.5 LoRA training smoke
+completed with 2-GPU FSDP; it proves the training path, not policy quality.
 
 ### 3. Later-stage command contract
 

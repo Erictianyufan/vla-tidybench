@@ -6,13 +6,13 @@ __pycache__/
 .env
 .env.*
 !.env.example
-data/
-datasets/
-checkpoints/
-logs/
+/data/
+/datasets/
+/checkpoints/
+/logs/
 results/videos/
 results/metrics/*.jsonl
-artifacts/
+/artifacts/
 
 # Never commit raw demonstrations, model weights or RL replay buffers.
 *.h5

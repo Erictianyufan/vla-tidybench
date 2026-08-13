@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "repo_id": "erictianyufan/vla_tidybench_stack_m1_smoke",
+  "fps": 20,
+  "prompt": "stack the red block on the blue block, then stack the green block on top",
+  "image_writer_threads": 8,
+  "sources": [
+    {
+      "file": "stack_train_candidate_10.hdf5",
+      "episode_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    },
+    {
+      "file": "stack_mimic_smoke_accepted_7.hdf5",
+      "episode_indices": [0, 1, 2, 3, 4, 5, 6]
+    }
+  ]
+}

@@ -12,8 +12,8 @@ from .action_adapter import ActionAdapter
 
 @dataclass(frozen=True)
 class SafetyLimits:
-    max_translation_norm_m: float = 0.035
-    max_rotation_norm_rad: float = 0.18
+    max_translation_norm_m: float = 0.18
+    max_rotation_norm_rad: float = 0.75
 
 
 class SafetyGuard:
@@ -35,4 +35,3 @@ class SafetyGuard:
 
     def to_isaac(self, action: ArrayLike) -> NDArray[np.float32]:
         return self.adapter.to_isaac(self.apply(action))
-

@@ -20,8 +20,10 @@ are complete.
 
 - [ ] Record and replay 20–30 accepted IK-relative human demonstrations.
 - [ ] Generate a quality-controlled Mimic dataset.
-- [ ] Convert HDF5 episodes to a versioned LeRobot/openpi dataset.
-- [ ] Train and evaluate a small behavior-cloning sanity baseline.
+- [x] Convert the 17-episode smoke corpus to a versioned LeRobot/openpi dataset.
+- [x] Compute norm stats and pass a real transformed-batch smoke test.
+- [x] Complete two π0.5 LoRA optimizer steps with 2-GPU FSDP.
+- [ ] Train and evaluate a behavior-cloning baseline on the formal data split.
 
 ## M2: drawer scene and atomic skills
 

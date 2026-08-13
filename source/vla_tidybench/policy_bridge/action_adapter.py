@@ -12,8 +12,11 @@ from numpy.typing import ArrayLike, NDArray
 class ActionSpec:
     """Canonical Franka action limits and simulator scaling."""
 
-    translation_limit_m: float = 0.025
-    rotation_limit_rad: float = 0.12
+    # Calibrated above the replay-validated expert envelope (0.125 m and
+    # 0.500 rad respectively). These are simulator command limits, not a
+    # claim about safe real-robot velocities.
+    translation_limit_m: float = 0.15
+    rotation_limit_rad: float = 0.55
     ik_relative_scale: float = 0.5
     gripper_threshold: float = 0.0
 
@@ -68,3 +71,15 @@ class ActionAdapter:
         vector[6] = 1.0 if vector[6] >= 0.0 else -1.0
         return vector
 
+    def from_isaac_batch(self, actions: ArrayLike) -> NDArray[np.float32]:
+        """Convert a recorded ``(T, 7)`` Isaac action sequence without clipping."""
+
+        matrix = np.asarray(actions, dtype=np.float32)
+        if matrix.ndim != 2 or matrix.shape[1] != 7:
+            raise ValueError(f"Expected action shape (T, 7), got {matrix.shape}")
+        if not np.isfinite(matrix).all():
+            raise ValueError("Actions contain NaN or infinity")
+        matrix = matrix.copy()
+        matrix[:, :6] *= self.spec.ik_relative_scale
+        matrix[:, 6] = np.where(matrix[:, 6] >= 0.0, 1.0, -1.0)
+        return matrix
