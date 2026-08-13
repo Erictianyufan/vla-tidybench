@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DATASET="${1:-/home/ubuntu/data/vla-tidybench/raw/stack_human.hdf5}"
+DATASET="${1:-/home/ubuntu/data/vla-tidybench/raw/stack_train_candidate_10.hdf5}"
 
 exec "${PROJECT_ROOT}/scripts/run_vendor_isaac.sh" scripts/tools/replay_demos.py \
   --task Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0 \
@@ -13,4 +13,3 @@ exec "${PROJECT_ROOT}/scripts/run_vendor_isaac.sh" scripts/tools/replay_demos.py
   --enable_cameras \
   --device cuda:0 \
   --viz none
-

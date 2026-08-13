@@ -67,7 +67,7 @@ force and action-smoothness gates.
 
 | Milestone | Deliverable | Status |
 | --- | --- | --- |
-| M0 | Official Franka IK-relative and visuomotor baseline | Passed except human-data gate |
+| M0 | Official Franka IK-relative, visuomotor and mixed-data baseline | Passed |
 | M1 | Custom tabletop/bin task and dataset pipeline | Planned |
 | M2 | Drawer scene and atomic skills | Planned |
 | M3 | π0.5 dataset conversion and fine-tuning | Planned |
@@ -110,13 +110,23 @@ make record
 After recording successful demonstrations:
 
 ```bash
-make replay
+make scripted-smoke
+make scripted-collect
+./scripts/replay_stack_demos.sh \
+  /home/ubuntu/data/vla-tidybench/raw/stack_train_candidate_10.hdf5
 make annotate
 make mimic-smoke
 ```
 
 Replay is a required data-quality gate. Joint-position demonstrations must not
 be mixed with the IK-relative 7D task-space action contract.
+
+The baseline candidate contains two replay-validated human episodes and eight
+replay-validated scripted-teacher episodes. The teacher reads simulator object
+poses and forward-kinematics end-effector state, emits canonical 7D actions and
+lets the environment's native DLS IK compute robot joint targets. Privileged
+object poses are not part of the deployable VLA input. See
+`results/metrics/stack_dataset_manifest.json` for hashes and QA results.
 
 ### 3. Later-stage command contract
 

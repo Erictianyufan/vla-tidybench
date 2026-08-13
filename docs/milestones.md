@@ -7,7 +7,9 @@
 - [x] Franka visuomotor environment returns two 200 x 200 RGB cameras.
 - [x] Canonical 7D action adapter and tests exist.
 - [x] Simulator-to-policy-server wire protocol passes across isolated Python environments.
-- [ ] Human demonstrations recorded and replayed.
+- [x] Human demonstrations recorded, audited and preserved as immutable raw data.
+- [x] Scripted truth/FK/DLS-IK teacher produces independent two-camera HDF5 episodes.
+- [x] Ten-episode mixed training candidate passes full replay validation (10/10).
 - [ ] Mimic ten-trial dataset smoke test passes.
 
 No custom drawer task, model fine-tuning or RL starts before the M0 data gates

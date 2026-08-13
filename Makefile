@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: doctor test sim-smoke sim-camera-smoke protocol-smoke record replay annotate mimic-smoke package-demo prepublish
+.PHONY: doctor test sim-smoke sim-camera-smoke protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
@@ -27,6 +27,16 @@ protocol-smoke:
 
 record:
 	./scripts/record_stack_demos.sh
+
+scripted-smoke:
+	NUM_DEMOS=1 MAX_ATTEMPTS=4 SEED=41 \
+	DATASET=/home/ubuntu/data/vla-tidybench/raw/stack_scripted_smoke.hdf5 \
+	./scripts/collect_scripted_stack.sh --overwrite
+
+scripted-collect:
+	NUM_DEMOS=$${NUM_DEMOS:-7} MAX_ATTEMPTS=$${MAX_ATTEMPTS:-28} \
+	DATASET=/home/ubuntu/data/vla-tidybench/raw/stack_scripted.hdf5 \
+	./scripts/collect_scripted_stack.sh --overwrite
 
 replay:
 	./scripts/replay_stack_demos.sh

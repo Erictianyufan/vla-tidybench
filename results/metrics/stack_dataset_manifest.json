@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-13T18:51:00+08:00",
+  "environment": "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
+  "control_hz": 20,
+  "action": "7D IK-relative task space plus binary gripper",
+  "candidate": {
+    "path": "/home/ubuntu/data/vla-tidybench/raw/stack_train_candidate_10.hdf5",
+    "sha256": "73acce1a4dbeb8b6ba257a5c440acd4b9e19a869bca25c6afc93ff651ce8624e",
+    "episodes": 10,
+    "steps": 3362,
+    "human_teleop_episodes": 2,
+    "scripted_truth_teacher_episodes": 8,
+    "full_replay": "10/10"
+  },
+  "raw_human": {
+    "path": "/home/ubuntu/data/vla-tidybench/raw/stack_human.hdf5",
+    "sha256": "8d7c1e7ea7a9d8e9537f6acc16316cb0fb7ebd3c8409ab08d15a408f5c971",
+    "exported_success_episodes": 3,
+    "accepted_episode_indices": [0, 1],
+    "excluded_episode_indices": [2],
+    "exclusion_reason": "failed strict nondeterministic physical replay"
+  },
+  "scripted_teacher": {
+    "versions": ["truth_fsm_dls_v1", "truth_fsm_dls_v2"],
+    "privileged_inputs": ["cube poses", "forward-kinematics end-effector pose"],
+    "deployable_policy_privileged_inputs": false,
+    "initial_batch_online_success": "7/7",
+    "initial_batch_strict_replay": "6/7",
+    "replacement_strict_replay": "2/2"
+  },
+  "quality_notes": [
+    "Raw files are preserved and are not tracked by Git.",
+    "The HDF5 format_version root attribute is preserved during merge.",
+    "Two 200x200 uint8 RGB streams are present in every accepted episode.",
+    "Excluded episodes remain available for failure analysis only."
+  ]
+}
