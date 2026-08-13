@@ -1,225 +1,198 @@
 # VLA-TidyBench
 
-Simulation-first, language-conditioned long-horizon manipulation with a Franka
-Panda, Isaac Sim, Isaac Lab, π0.5 and failure-driven residual reinforcement
-learning.
+VLA-TidyBench 是一个面向具身智能工程作品集的仿真项目：在 Isaac Sim / Isaac Lab 中使用 Franka Panda 完成抽屉操作，并打通自动示范采集、LeRobot 数据转换、OpenPI π0.5 LoRA、策略服务、TaskGraph、Mimic、OOD 评测和强化学习扩展接口。
 
-> Final task: **“Put the red mug into the top drawer and close it.”**
+> 目标任务：**Put the red object into the top drawer and close it.**
 
-This repository is under active development. The official Franka baseline,
-two-camera observation path and the isolated simulator-to-policy protocol are
-validated. Drawer-task training, final evaluation and the demonstration video
-will only be marked complete after their milestone gates pass; no result in
-this README is a placeholder presented as an experiment.
+![OPEN / PICK / PLACE / CLOSE scripted skill suite](docs/media/demo-preview.gif)
 
-## Project objective
+## 当前成果与边界
 
-VLA-TidyBench is an end-to-end portfolio project for embodied-AI engineering.
-It covers task construction, human and synthetic data collection, π0.5
-adaptation, closed-loop deployment, long-horizon task composition, targeted RL
-post-training and reproducible ID/OOD evaluation—all in simulation, without
-claiming sim-to-real performance.
+截至 2026-08-13，以下核心工程链已经实际运行：
 
-The final scene uses a Franka Panda, a cabinet with two drawers and distractor
-objects. A language command selects the target object and drawer. The robot
-must open the drawer, grasp the object, place it inside and close the drawer.
+- 自定义 Franka + 双层柜体 + 红色目标物场景；桌面和腕部两路 `200×200` RGB 相机。
+- 统一 7D 相对末端动作：`[dx, dy, dz, dRx, dRy, dRz, gripper]`，由 Isaac Lab DLS IK 执行。
+- “物体真值定位 + 状态机规划 + 正运动学读取 + DLS 逆运动学”自动教师。
+- OPEN、PICK、PLACE、CLOSE 四个原子技能均完成成功采集及物理回放验证。
+- 四个语言技能共 4 个 episode、684 帧、20 Hz，已转换为本地 LeRobot 数据集。
+- π0.5 归一化统计、双 RTX 4090 FSDP LoRA 2-step 训练冒烟、checkpoint 恢复和一次离线推理均通过。
+- OpenPI checkpoint 输出动作块形状为 `(16, 7)`；首次 JIT 推理约 `17.1 s`，目前只证明部署接口，不代表实时闭环性能。
+- 已生成 40.2 秒双相机 scripted-teacher 技能演示视频。
 
-## Technical route
+以下部分被完整保留，但本次为节省云服务器费用没有执行长时间实验：
+
+- **Drawer Mimic**：固定成功轨迹输入、自动标注/生成产物路径及 smoke 预算。正式大规模生成待后续执行。
+- **OOD 大评测**：保留 ID、视觉 OOD、几何 OOD、物理 OOD 四类桶、固定种子和 manifest 生成器；当前仅生成 8 回合 smoke 计划，未声称成功率。
+- **强化学习**：保留冻结 π0.5、仅修正 6D 末端动作的 bounded residual SAC 接口、奖励项、无特权 actor 约束和 LoRA 回退门；尚未进行长程 RL 训练。
+
+连续的 OPEN→PICK→PLACE→CLOSE scripted TaskGraph 在 OPEN→PICK 的状态切换处仍会出现抓取失败，因此最终视频是四条独立、回放验证通过的原子技能展播，**不是**一次连续 VLA 策略成功，也不是 2-step checkpoint 的性能证明。
+
+## 技术路线
 
 ```mermaid
 flowchart LR
-    A["Isaac Sim + Isaac Lab<br/>Franka / cabinet / two RGB cameras"]
-    B["Human demonstrations<br/>7D task-space actions"]
-    C["Replay QA + Isaac Lab Mimic"]
-    D["LeRobot / openpi dataset"]
-    E["π0.5 imitation fine-tuning"]
-    F["WebSocket policy service<br/>receding-horizon control"]
-    G["TaskGraph<br/>OPEN → PICK → PLACE → CLOSE"]
-    H["Failure collection<br/>bounded residual RL"]
-    I["Fixed-seed ID/OOD evaluation"]
-    J["Demo + private release"]
-    A --> B --> C --> D --> E --> F --> G --> H --> I --> J
+    A["Isaac Sim 6.0.1<br/>Isaac Lab 3.0 beta2"]
+    B["Franka + cabinet<br/>two RGB cameras"]
+    C["Truth FSM teacher<br/>FK state + DLS IK"]
+    D["HDF5 replay QA"]
+    E["LeRobot dataset<br/>684 frames / 4 prompts"]
+    F["OpenPI π0.5<br/>LoRA / FSDP"]
+    G["WebSocket policy bridge<br/>7D action adapter"]
+    H["TaskGraph<br/>OPEN → PICK → PLACE → CLOSE"]
+    I["Mimic / OOD / residual RL"]
+    A --> B --> C --> D --> E --> F --> G --> H --> I
 ```
 
-The simulator and VLA run in separate processes and Python environments:
+Isaac 和 OpenPI 使用两个独立 Python 环境及进程，避免 PyTorch/Isaac 与 JAX 依赖冲突：
 
 ```text
-GPU 0: Isaac Sim 6.0.1 + Isaac Lab + two RGB cameras
-GPU 1: openpi π0.5 policy server / training
+GPU 0: Isaac Sim / Isaac Lab / cameras
+GPU 1: OpenPI policy inference
+GPU 0 + 1: short FSDP LoRA smoke training
 
-Isaac worker  <-- WebSocket/msgpack -->  openpi policy server
+Isaac worker  <-- WebSocket + msgpack -->  OpenPI policy server
 ```
 
-The canonical robot action is a physical 7D command:
-`[dx, dy, dz, dRx, dRy, dRz, gripper]`, with translation in metres, rotation in
-radians and a binary gripper command. Data conversion and deployment share one
-action adapter. The nominal control rate is 20 Hz; an action chunk covers a
-short horizon and is replanned after 2–4 executed steps.
+部署策略仅接收双 RGB、关节本体状态和语言。物体位姿、抽屉关节和接触真值仅供 scripted teacher、成功判定、Mimic、RL reward/critic 和调试使用，不进入可部署 VLA actor。
 
-RL does not replace imitation learning. Once the π0.5 baseline is frozen, a
-small bounded residual policy targets one empirically identified contact-rich
-failure mode. Simulator truth may be used by the reward and asymmetric critic,
-but not by the deployable actor. The RL specialist is enabled in the TaskGraph
-only if paired evaluation shows an improvement without violating collision,
-force and action-smoothness gates.
+## 快速复现
 
-## Status
-
-| Milestone | Deliverable | Status |
-| --- | --- | --- |
-| M0 | Official Franka IK-relative, visuomotor and mixed-data baseline | Passed |
-| M1 | Custom tabletop/bin task and dataset pipeline | Planned |
-| M2 | Drawer scene and atomic skills | Planned |
-| M3 | π0.5 dataset conversion and fine-tuning | Planned |
-| M4 | Closed-loop policy service and TaskGraph | Planned |
-| M5 | Failure-driven residual RL experiment | Planned |
-| M6 | Locked ID/OOD evaluation, Demo and private release | Planned |
-
-The detailed gates are in [docs/milestones.md](docs/milestones.md).
-
-## Reproducible commands
-
-### 1. Environment and protocol checks
-
-Run these commands on the provisioned server:
+所有命令在已配置的云服务器执行：
 
 ```bash
 cd /home/ubuntu/mycode/vla-tidybench
+```
+
+### 1. 环境与接口检查
+
+```bash
 make doctor
 make test
-make sim-smoke
-make sim-camera-smoke
+make drawer-scene-smoke
 make protocol-smoke
 ```
 
-The Isaac process must run through `scripts/run_isaac.sh`, which activates the
-preinstalled Python 3.12 environment and pins rendering to GPU 0. The openpi
-process runs through `scripts/run_openpi.sh` in its separate Python 3.11/JAX
-environment.
+### 2. 自动采集与回放
 
-### 2. Human demonstration and Mimic smoke test
-
-Start recording from the cloud desktop because keyboard teleoperation is
-interactive:
+运行四个原子技能采集：
 
 ```bash
-cd /home/ubuntu/mycode/vla-tidybench
-make record
+make drawer-atomic-validate
 ```
 
-After recording successful demonstrations:
+单独采集或回放：
 
 ```bash
-make scripted-smoke
-make scripted-collect
-./scripts/replay_stack_demos.sh \
-  /home/ubuntu/data/vla-tidybench/raw/stack_train_candidate_10.hdf5
-make annotate
-make mimic-smoke
-make convert-openpi-smoke
-make openpi-norm-stats
-make openpi-data-smoke
-make train-pi05-smoke
+make drawer-open-smoke
+make drawer-pick-smoke
+make drawer-place-smoke
+make drawer-close-smoke
+
+make drawer-replay \
+  SKILL=open \
+  DATASET_FILE=/home/ubuntu/data/vla-tidybench/raw/drawer_open_smoke.hdf5
 ```
 
-Replay is a required data-quality gate. Joint-position demonstrations must not
-be mixed with the IK-relative 7D task-space action contract.
+采集器读取 simulator truth 生成末端目标，但 HDF5 policy observation 只保存 `joint_pos`、`joint_vel`、`table_cam` 和 `wrist_cam`。human、teacher、Mimic、训练和部署必须保持同一 7D IK-relative 动作语义。
 
-The baseline candidate contains two replay-validated human episodes and eight
-replay-validated scripted-teacher episodes. The teacher reads simulator object
-poses and forward-kinematics end-effector state, emits canonical 7D actions and
-lets the environment's native DLS IK compute robot joint targets. Privileged
-object poses are not part of the deployable VLA input. See
-`results/metrics/stack_dataset_manifest.json` for hashes and QA results.
-
-The Mimic smoke gate is also complete. Automatic annotation exported all ten
-candidate episodes. Mimic then produced ten online-success trajectories in 30
-attempts (33.3%); strict post-generation physical replay reproduced 7/10. The
-raw generated set and its replay allowlist are preserved separately because
-contact-rich Isaac physics replay is not guaranteed deterministic.
-
-The M1 smoke dataset currently combines the ten-episode baseline and seven
-independently replay-validated Mimic episodes: 17 episodes, 5,554 frames at
-20 Hz. The converter exposes only two RGB images, an 18D joint position/velocity
-state, language and canonical 7D actions. A two-step π0.5 LoRA training smoke
-completed with 2-GPU FSDP; it proves the training path, not policy quality.
-
-### 3. Later-stage command contract
-
-The following interfaces are reserved for later milestones and are not claimed
-as implemented until their corresponding status changes to **Passed**:
+### 3. HDF5 → LeRobot → π0.5
 
 ```bash
-make build-drawer-task       # validate reset, reward, success and cameras
-make generate-dataset        # create accepted Mimic episodes
-make convert-openpi          # HDF5 -> LeRobot/openpi, episode-level split
-make train-pi05              # π0.5 imitation fine-tuning
-make eval-pi05               # frozen-seed atomic and end-to-end evaluation
-make collect-rl              # failures, near misses and bounded exploration
-make train-residual-rl       # frozen-VLA residual actor/critic
-make eval-final              # locked paired ID/OOD evaluation
-make record-final-demo       # deterministic render plus run metadata
-make package-demo INPUT=...  # H.264 MP4, preview GIF and SHA-256
-make prepublish              # tracked-file and secret audit
+make drawer-convert-openpi
+make drawer-norm-stats
+
+# 只验证链路；2 step 不代表策略已学会任务
+STEPS=2 BATCH_SIZE=2 FSDP_DEVICES=2 \
+  EXP_NAME=drawer-smoke make drawer-train
+
+# 从 Orbax checkpoint 恢复并对一条真实观测执行推理
+make drawer-policy-smoke
 ```
 
-Each command will be wired to a checked-in config before it is documented as
-runnable. This prevents a README from getting ahead of the actual system.
-
-## Evaluation protocol
-
-The final report will compare the scripted teacher, base π0.5, fine-tuned π0.5
-and π0.5 plus the gated RL specialist on the same episode seeds and action
-adapter. Skill and checkpoint selection use a validation split; the locked
-final test set is evaluated once after freezing the release candidate.
-
-Reported metrics include end-to-end success, stage completion, time to
-completion, collisions, peak force, action jerk and inference latency. ID,
-visual OOD, geometric/physical OOD and perturbation recovery are reported
-separately. Success rates include confidence intervals; paired policy deltas
-use paired resampling rather than treating matched episodes as independent.
-
-Final metrics: **pending locked evaluation**.
-
-## Demo and release policy
-
-The final video protocol is defined in
-[docs/demo_protocol.md](docs/demo_protocol.md). The primary task segment is an
-uninterrupted simulator rollout; editing may add labels, metrics and narration
-but must not conceal policy interventions or splice several attempts into a
-fake success.
-
-The repository is intended to remain private during development. The
-publication checklist in
-[docs/private_release_checklist.md](docs/private_release_checklist.md) blocks
-upload until tests, fixed-seed evaluation, secret scanning and artifact checks
-pass. Raw data, model weights, server credentials, SSH keys and full-resolution
-MP4 files are excluded from Git history. The final MP4 is attached to a private
-GitHub Release; only a small preview GIF is tracked in the repository.
-
-## Safety and scope
-
-- The actor receives RGB, deployable proprioception, language, prior actions
-  and policy state only; privileged simulator state is reserved for training
-  rewards, critics, success labels and diagnostics.
-- The VLA and simulator are isolated because their JAX and PyTorch/Isaac
-  dependency stacks are incompatible.
-- The frozen imitation-learning policy remains the fallback whenever the RL
-  specialist fails its release gate.
-- This is a simulation-first research and engineering demonstration. It does
-  not claim real-robot deployment or sim-to-real validation.
-
-## Repository layout
+主要产物位于：
 
 ```text
-configs/             versioned simulator and training configuration
-docs/                action contract, deployment, milestones and release docs
-policy_bridge/       standalone policy-server protocol smoke tests
-scripts/             launch, collection, evaluation and packaging entrypoints
-source/              reusable VLA-TidyBench Python package
-tests/               dependency-light unit tests
-results/metrics/     small, versioned evaluation summaries
-docs/media/          small README preview assets only
+/home/ubuntu/data/vla-tidybench/raw/
+/home/ubuntu/data/vla-tidybench/cache/huggingface/lerobot/
+/home/ubuntu/data/vla-tidybench/checkpoints/openpi-assets/
+/home/ubuntu/data/vla-tidybench/checkpoints/openpi-runs/
 ```
 
-No public license is granted while this repository remains private.
+### 4. Demo
+
+```bash
+make drawer-demo
+```
+
+输出：
+
+```text
+artifacts/demo/vla-tidybench-skill-suite.mp4
+docs/media/demo-preview.gif
+```
+
+原始 HDF5、模型权重和 MP4 被 `.gitignore` 排除；MP4 应上传到私有 GitHub Release，而非提交到 Git 历史。
+
+## 保留的进阶模块
+
+### Isaac Lab Mimic
+
+Drawer smoke 配置位于 `configs/mimic/drawer_smoke.json`。后续流程为：成功完整轨迹 → 子任务标注 → 10-trial smoke → replay QA → 逐步扩到 500–1000 条成功轨迹。当前自定义 drawer TaskGraph 需先解决 OPEN→PICK 连续状态，再启用大规模生成。
+
+项目早期官方 Franka stack baseline 已实际完成 Mimic smoke：10 条在线成功轨迹来自 30 次生成尝试，严格物理回放通过 7/10。这也说明 contact-rich physics replay 不保证逐帧确定。
+
+### OOD 大评测
+
+```bash
+make extension-smoke
+make ood-plan
+```
+
+`configs/eval/drawer_ood_smoke.json` 固定四类评测桶；`scripts/plan_ood_eval.py` 生成不可重复种子的 rollout manifest。正式评测应使用冻结 checkpoint，分别报告每桶 success rate、95% Wilson CI、碰撞、峰值力、耗时、action jerk 和推理延迟；同 seed 策略差值使用 paired bootstrap，而不是把两组视作独立样本。
+
+### 冻结 VLA 的残差强化学习
+
+RL 主线不直接声称“用 SAC 微调了 π0.5”。公开 OpenPI π0.5 是 Flow-Matching 行为克隆策略，没有可直接用于标准 PPO/SAC 的 log-prob/value/replay 接口。本项目采用可落地的工程边界：
+
+```text
+a_exec = SafetyGuard(a_pi05 + beta * clip(delta_a))
+```
+
+- 冻结 π0.5 + LoRA；残差 actor 仅输出 6D 连续末端修正，不改离散夹爪通道。
+- actor 只看可部署本体量、nominal action 和 chunk state；drawer joint/handle pose/contact truth 只给 asymmetric critic 与 reward。
+- 首选 OPEN_DRAWER 单技能 Residual SAC；只有 paired validation 提升且碰撞、力和 jerk 不恶化时才接入 TaskGraph。
+- 任一 gate 失败，默认回退到冻结的 LoRA 策略。
+
+配置和可测试核心位于 `configs/rl/open_residual_sac.json` 与 `source/vla_tidybench/rl/`。
+
+## 仓库结构
+
+```text
+configs/                 数据、仿真、Mimic、OOD、RL 配置
+docs/                    动作规范、部署、里程碑和发布检查
+policy_bridge/           独立 WebSocket 协议测试服务器
+scripts/                 采集、回放、转换、训练、评测和视频入口
+source/vla_tidybench/    可复用 Python 包
+tests/                   依赖较轻的单元与契约测试
+results/metrics/         小型、可版本化的 manifest/指标
+artifacts/               不进入 Git 的视频与发布产物
+```
+
+## 诚实复现声明
+
+本仓库证明的是完整工程链路和模块化设计，不声称：
+
+- 2-step LoRA checkpoint 已学会抽屉任务；
+- scripted teacher Demo 是 VLA 闭环结果；
+- 连续长任务、Drawer Mimic 大规模生成、OOD 大评测或 RL 训练已经完成；
+- 仿真结果可直接迁移到真实机器人。
+
+发布前运行：
+
+```bash
+make test
+make extension-smoke
+make prepublish
+```
+
+项目开发期保持私有，暂不授予公共许可证。

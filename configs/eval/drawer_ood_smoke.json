@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "episodes_per_bucket": 2,
+  "buckets": {
+    "id": {"seeds": [2001, 2002]},
+    "visual_ood": {
+      "seeds": [2101, 2102],
+      "light_intensity_scale": [0.65, 1.35],
+      "camera_position_jitter_m": 0.015
+    },
+    "geometry_ood": {
+      "seeds": [2201, 2202],
+      "object_xy_jitter_m": 0.025,
+      "drawer_init_jitter_m": 0.015
+    },
+    "physics_ood": {
+      "seeds": [2301, 2302],
+      "friction_scale": [0.8, 1.2],
+      "mass_scale": [0.8, 1.2]
+    }
+  }
+}

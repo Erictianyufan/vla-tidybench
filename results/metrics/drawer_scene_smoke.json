@@ -1,0 +1,38 @@
+{
+  "passed": true,
+  "policy_dt_s": 0.05,
+  "policy_hz": 20.0,
+  "observation_keys": [
+    "joint_pos",
+    "joint_vel",
+    "table_cam",
+    "wrist_cam"
+  ],
+  "table_cam_shape": [
+    1,
+    200,
+    200,
+    3
+  ],
+  "wrist_cam_shape": [
+    1,
+    200,
+    200,
+    3
+  ],
+  "joint_pos_shape": [
+    1,
+    9
+  ],
+  "joint_vel_shape": [
+    1,
+    9
+  ],
+  "drawer_joint_index": 1,
+  "drawer_joint_pos": -8.630574713592412e-21,
+  "target_pos_w": [
+    0.41999998688697815,
+    -0.20000003278255463,
+    0.034999921917915344
+  ]
+}

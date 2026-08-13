@@ -29,9 +29,9 @@ def main() -> int:
     if int(config.get("schema_version", -1)) != 1:
         parser.error("unsupported conversion config schema_version")
     repo_id = str(config["repo_id"])
-    prompt = str(config["prompt"]).strip()
-    if not prompt:
-        parser.error("prompt must be non-empty")
+    default_prompt = str(config.get("prompt", "")).strip()
+    if not default_prompt and any(not str(source.get("prompt", "")).strip() for source in config["sources"]):
+        parser.error("every source needs prompt, or set a non-empty top-level prompt")
 
     output_path = HF_LEROBOT_HOME / repo_id
     if output_path.exists():
@@ -65,6 +65,9 @@ def main() -> int:
     frame_count = 0
     for source in config["sources"]:
         source_path = (args.data_root / source["file"]).resolve()
+        prompt = str(source.get("prompt", default_prompt)).strip()
+        if not prompt:
+            raise ValueError(f"missing prompt for {source_path}")
         with h5py.File(source_path, "r") as source_file:
             names = sorted_episode_names(source_file["data"])
         indices = source.get("episode_indices", list(range(len(names))))

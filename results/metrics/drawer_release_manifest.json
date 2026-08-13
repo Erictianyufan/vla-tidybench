@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-13T15:18:15.881519+00:00",
+  "release_scope": "cost_bounded_core_chain",
+  "dataset": {
+    "episodes": 4,
+    "frames": 684,
+    "fps": 20,
+    "records": [
+      {
+        "skill": "open",
+        "path": "/home/ubuntu/data/vla-tidybench/raw/drawer_open_smoke.hdf5",
+        "bytes": 9024875,
+        "sha256": "03325bd7634d2bda9fb92c81ea9a22283132c4b6e083edeaaf0714d623e5d3f1",
+        "steps": 119,
+        "action_shape": [
+          7
+        ],
+        "observation_keys": [
+          "joint_pos",
+          "joint_vel",
+          "table_cam",
+          "wrist_cam"
+        ],
+        "recorded_success": true
+      },
+      {
+        "skill": "pick",
+        "path": "/home/ubuntu/data/vla-tidybench/raw/drawer_pick_smoke.hdf5",
+        "bytes": 7793860,
+        "sha256": "4bb0f95652b8553982bc5e40c9578ab85d4ed29119c6cbdab440b4a3045238f5",
+        "steps": 83,
+        "action_shape": [
+          7
+        ],
+        "observation_keys": [
+          "joint_pos",
+          "joint_vel",
+          "table_cam",
+          "wrist_cam"
+        ],
+        "recorded_success": true
+      },
+      {
+        "skill": "place",
+        "path": "/home/ubuntu/data/vla-tidybench/raw/drawer_place_smoke.hdf5",
+        "bytes": 15013437,
+        "sha256": "4eaca2cbd07f830e06430e2f0171ee0c400f17c8a973477ebcd91694321e4356",
+        "steps": 194,
+        "action_shape": [
+          7
+        ],
+        "observation_keys": [
+          "joint_pos",
+          "joint_vel",
+          "table_cam",
+          "wrist_cam"
+        ],
+        "recorded_success": true
+      },
+      {
+        "skill": "close",
+        "path": "/home/ubuntu/data/vla-tidybench/raw/drawer_close_smoke.hdf5",
+        "bytes": 21399765,
+        "sha256": "dab9114d2d387aa870814f5b00c94575e3c5b2a85d2bd30a2e0c8380b4601d2d",
+        "steps": 288,
+        "action_shape": [
+          7
+        ],
+        "observation_keys": [
+          "joint_pos",
+          "joint_vel",
+          "table_cam",
+          "wrist_cam"
+        ],
+        "recorded_success": true
+      }
+    ]
+  },
+  "openpi": {
+    "config": "pi05_tidybench_drawer_lora",
+    "training_steps": 2,
+    "checkpoint": "/home/ubuntu/data/vla-tidybench/checkpoints/openpi-runs/pi05_tidybench_drawer_lora/drawer-smoke/1",
+    "checkpoint_metadata_sha256": "bcc4e27dc8f4772594d373eea2d55d4690a174b7a2c48f82a5405df730ebe0ff",
+    "restore_and_offline_inference": "passed",
+    "action_chunk_shape": [
+      16,
+      7
+    ],
+    "first_jit_inference_ms": 17145.0,
+    "claim": "pipeline smoke only; no learned-policy success claim"
+  },
+  "demo": {
+    "path": "/home/ubuntu/mycode/vla-tidybench/artifacts/demo/vla-tidybench-demo.mp4",
+    "bytes": 4647710,
+    "sha256": "41919e365dddf82e1b0acb5fc3b327a53ee637a4dcae84c2a29fcc2d80f90f1a",
+    "kind": "four replay-validated scripted-teacher atomic skills"
+  },
+  "extensions": {
+    "mimic": "config retained; long generation not run",
+    "ood": "locked 8-episode smoke manifest retained; rollouts not run",
+    "residual_rl": "bounded composer/reward/config tested; training not run"
+  },
+  "known_limitations": [
+    "continuous OPEN-PICK-PLACE-CLOSE TaskGraph rollout has not passed",
+    "demo is not a learned VLA policy rollout",
+    "two-step LoRA checkpoint is not a quality checkpoint"
+  ]
+}

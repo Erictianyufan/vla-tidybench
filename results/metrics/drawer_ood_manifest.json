@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "episodes": [
+    {
+      "bucket": "id",
+      "seed": 2001,
+      "settings": {}
+    },
+    {
+      "bucket": "id",
+      "seed": 2002,
+      "settings": {}
+    },
+    {
+      "bucket": "visual_ood",
+      "seed": 2101,
+      "settings": {
+        "light_intensity_scale": [
+          0.65,
+          1.35
+        ],
+        "camera_position_jitter_m": 0.015
+      }
+    },
+    {
+      "bucket": "visual_ood",
+      "seed": 2102,
+      "settings": {
+        "light_intensity_scale": [
+          0.65,
+          1.35
+        ],
+        "camera_position_jitter_m": 0.015
+      }
+    },
+    {
+      "bucket": "geometry_ood",
+      "seed": 2201,
+      "settings": {
+        "object_xy_jitter_m": 0.025,
+        "drawer_init_jitter_m": 0.015
+      }
+    },
+    {
+      "bucket": "geometry_ood",
+      "seed": 2202,
+      "settings": {
+        "object_xy_jitter_m": 0.025,
+        "drawer_init_jitter_m": 0.015
+      }
+    },
+    {
+      "bucket": "physics_ood",
+      "seed": 2301,
+      "settings": {
+        "friction_scale": [
+          0.8,
+          1.2
+        ],
+        "mass_scale": [
+          0.8,
+          1.2
+        ]
+      }
+    },
+    {
+      "bucket": "physics_ood",
+      "seed": 2302,
+      "settings": {
+        "friction_scale": [
+          0.8,
+          1.2
+        ],
+        "mass_scale": [
+          0.8,
+          1.2
+        ]
+      }
+    }
+  ]
+}

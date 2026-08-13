@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "name": "open_drawer_frozen_vla_residual_sac",
+  "base_policy": "pi05_tidybench_drawer_lora",
+  "base_policy_frozen": true,
+  "skill": "open",
+  "algorithm": "SAC",
+  "actor_observation": [
+    "joint_pos",
+    "joint_vel",
+    "eef_pose",
+    "previous_action",
+    "nominal_action",
+    "chunk_index",
+    "replan_flag"
+  ],
+  "actor_privileged_fields": [],
+  "critic_privileged_fields": ["drawer_joint", "handle_pose", "contact", "collision"],
+  "residual": {
+    "dimensions": 6,
+    "translation_limit_m": 0.015,
+    "rotation_limit_rad": 0.08,
+    "beta": 0.25,
+    "gripper_residual": false
+  },
+  "release_gate": {
+    "paired_validation_required": true,
+    "fallback": "pi05_tidybench_drawer_lora",
+    "must_not_worsen_collision_force_or_jerk": true
+  }
+}

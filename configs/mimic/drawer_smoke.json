@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "input": "/home/ubuntu/data/vla-tidybench/raw/drawer_full_smoke.hdf5",
+  "annotated": "/home/ubuntu/data/vla-tidybench/raw/drawer_full_annotated.hdf5",
+  "output": "/home/ubuntu/data/vla-tidybench/raw/drawer_mimic_smoke.hdf5",
+  "generation_num_trials": 10,
+  "num_envs": 4,
+  "export_success_only": true,
+  "note": "Custom task registration and Mimic subtask terms are an extension gate; do not treat this config as completed generation."
+}
