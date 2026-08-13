@@ -54,7 +54,7 @@ An informative negative RL result still completes the experiment, but it is not
 released as an “RL-enhanced” policy. In that case the final TaskGraph keeps the
 frozen imitation-learning route.
 
-## M6: final evaluation and private release
+## M6: final evaluation and public source release
 
 - [ ] Freeze code, configs, checkpoint hashes, dataset hashes and test seeds.
 - [ ] Run the locked ID/OOD evaluation exactly once.
@@ -62,6 +62,6 @@ frozen imitation-learning route.
 - [ ] Package the MP4, preview GIF, metrics and checksums.
 - [ ] Replace pending README results with generated, auditable numbers.
 - [ ] Pass `make prepublish` with a clean worktree.
-- [ ] Create `Erictianyufan/vla-tidybench` as a **private** GitHub repository.
-- [ ] Push the signed-off source and attach the MP4 to a private release.
-- [ ] Verify anonymous access cannot view the repository or release.
+- [ ] Create `Erictianyufan/vla-tidybench` as a **public** GitHub repository.
+- [ ] Push audited source, configs, tests, metric summaries and the redacted GIF preview.
+- [ ] Verify raw data, weights, credentials and the full MP4 are absent from Git history.

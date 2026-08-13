@@ -131,7 +131,7 @@ artifacts/demo/vla-tidybench-skill-suite.mp4
 docs/media/demo-preview.gif
 ```
 
-原始 HDF5、模型权重和 MP4 被 `.gitignore` 排除；MP4 应上传到私有 GitHub Release，而非提交到 Git 历史。
+原始 HDF5、模型权重和完整 MP4 被 `.gitignore` 排除。公开仓库提交脱敏的短 GIF 预览和指标摘要；完整视频作为 GitHub Release 附件发布，不进入 Git 历史。
 
 ## 保留的进阶模块
 
@@ -195,4 +195,4 @@ make extension-smoke
 make prepublish
 ```
 
-项目开发期保持私有，暂不授予公共许可证。
+本项目公开源代码、脱敏预览和完整演示视频，但不公开原始数据、模型权重或云端连接信息。仓库暂不授予公共许可证。

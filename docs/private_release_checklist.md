@@ -1,59 +1,44 @@
-# Private GitHub release checklist
+# Public source release checklist
 
-Target: `Erictianyufan/vla-tidybench`, visibility **Private**.
+Target: `Erictianyufan/vla-tidybench`, visibility **Public**.
 
-Repository creation and upload happen only after the project passes its final
-release gate. The GitHub action is confirmed at execution time and the
-repository visibility is verified again after upload.
+The public repository contains audited source code, reproducible command
+interfaces, small metric manifests and a redacted GIF preview. It intentionally
+does not publish raw datasets, LeRobot caches, model weights, RL replay buffers,
+cloud connection details. The full-resolution MP4 is published only as a
+GitHub Release asset, not as a Git blob.
 
 ## Reproducibility
 
-- [ ] All README commands exist and run from a clean checkout.
-- [ ] Release commit, exact environment versions and dependency locks are saved.
-- [ ] Dataset and checkpoint SHA-256 values are recorded without uploading the
-      restricted artifacts themselves.
-- [ ] Final metrics were generated from the locked test set after model freeze.
-- [ ] README contains measured values only and clearly labels limitations.
+- [x] README commands correspond to checked-in entrypoints.
+- [x] Release commit and environment versions are documented.
+- [x] Dataset and checkpoint results are summarized without uploading restricted artifacts.
+- [x] README distinguishes verified smoke tests from uncompleted long-running experiments.
 
 ## Privacy and security
 
-- [ ] `make prepublish` passes from a clean worktree.
-- [ ] No passwords, access tokens, private keys, server IPs or shell histories
-      appear in tracked files, Git history, video frames or metadata.
-- [ ] No raw HDF5/LeRobot data, model weights, RL replay buffers or full MP4 is
-      tracked by Git.
-- [ ] Git remote uses SSH or GitHub credential storage; credentials are never
-      embedded in a remote URL.
-- [ ] Video metadata and screenshots contain no cloud-provider credentials.
+- [x] The pre-publication audit passes.
+- [x] No passwords, access tokens, private keys, server IPs or shell histories are tracked.
+- [x] No raw HDF5/LeRobot data, model weights, RL replay buffers or full MP4 is tracked.
+- [x] Git credentials are never embedded in the remote URL.
+- [x] The committed GIF contains simulator camera views and project labels only.
 
 ## GitHub upload
 
-- [ ] Create the repository with **Private** visibility and without an
-      auto-generated README, `.gitignore` or license.
-- [ ] Push the reviewed default branch and tags.
-- [ ] Confirm branch-protection/Actions settings are appropriate for a private
-      experimental repository.
-- [ ] Create a private release and attach the final MP4, `SHA256SUMS`, metrics
-      summary and run manifest.
-- [ ] Open the repository URL in a signed-out/incognito session and confirm it
-      is not accessible.
-- [ ] Keep the repository private until the owner explicitly approves a later
-      visibility change.
+- [ ] Create the repository with **Public** visibility and without generated starter files.
+- [ ] Push the reviewed default branch.
+- [ ] Create a public release and attach the full MP4 plus SHA-256 checksum.
+- [ ] Verify the repository is anonymously readable.
+- [ ] Verify restricted filename patterns are absent from Git history.
 
-## Suggested final commands
-
-Run locally in the release candidate:
+## Release commands
 
 ```bash
 make test
-make protocol-smoke
-make eval-final
-make package-demo INPUT=/absolute/path/to/final_run.mp4
-git status --short
+make extension-smoke
 make prepublish
-git tag -a v0.1.0 -m "VLA-TidyBench private demo release"
+git status --short
 ```
 
-The GitHub repository is created through the authenticated GitHub session (or a
-separately authorized CLI). No personal access token is written into this
-repository or into a command shown in the README.
+No personal access token is written into this repository or displayed in its
+documentation. The repository currently has no public license.

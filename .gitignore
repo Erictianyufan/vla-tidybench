@@ -25,7 +25,7 @@ results/metrics/*.jsonl
 *.pt
 *.pth
 
-# Full videos belong in the private GitHub Release, not Git history.
+# Full videos remain local and never enter the public Git history.
 *.mp4
 *.mov
 *.mkv

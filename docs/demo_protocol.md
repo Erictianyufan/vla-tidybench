@@ -61,8 +61,9 @@ The script creates:
 - `docs/media/demo-preview.gif` — short repository preview;
 - `artifacts/demo/SHA256SUMS` — integrity record.
 
-The MP4 remains outside Git and is uploaded to the private GitHub Release. The
-preview GIF may be committed only if it is under the pre-publication size limit.
+The full MP4 remains outside Git and is uploaded as a public GitHub Release
+asset. Only the redacted preview GIF may be committed to Git, and only if it is
+under the pre-publication size limit.
 
 ## Minimum final video set
 
