@@ -33,6 +33,7 @@ results/metrics/*.jsonl
 
 # One small, explicitly labeled presentation preview is published with the docs.
 !docs/media/vla-tidybench-new-scene-preview.mp4
+!docs/media/vla-tidybench-final-project.mp4
 
 # Credentials and host-specific access material.
 *.pem

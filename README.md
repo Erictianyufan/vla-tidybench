@@ -8,6 +8,8 @@ VLA-TidyBench 是一个面向具身智能工程作品集的仿真项目：在 Is
 
 [查看新场景三机位视频（scripted teacher，仅用于场景与构图预览）](docs/media/vla-tidybench-new-scene-preview.mp4)
 
+[查看最终项目视频（包含真实 π0.5 闭环结果与四技能专家展示）](docs/media/vla-tidybench-final-project.mp4)
+
 ## 当前实测状态
 
 核心工程链路已经实际运行：

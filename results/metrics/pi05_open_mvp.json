@@ -23,5 +23,12 @@
     "success": false,
     "final_drawer_position_m_approx": 0.0
   },
+  "additional_rollout": {
+    "seed": 300,
+    "execute_steps_per_chunk": 16,
+    "control_steps": 192,
+    "success": false,
+    "final_drawer_position_m_approx": 0.0
+  },
   "claim": "Training and real policy closed-loop execution completed; the small-data policy did not pass the OPEN success gate."
 }
