@@ -6,7 +6,6 @@ from dataclasses import replace
 
 from vla_tidybench.openpi.stack_config import make_config as make_stack_config
 
-
 CONFIG_NAME = "pi05_tidybench_drawer_lora"
 REPO_ID = "erictianyufan/vla_tidybench_drawer_m2_smoke"
 

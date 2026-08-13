@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 COLLECTOR = PROJECT_ROOT / "scripts" / "collect_scripted_drawer.py"
 ENV_CFG = PROJECT_ROOT / "source" / "vla_tidybench" / "isaac" / "drawer_env_cfg.py"

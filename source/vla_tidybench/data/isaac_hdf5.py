@@ -33,7 +33,7 @@ class EpisodeArrays:
         return int(self.actions.shape[0])
 
 
-def sorted_episode_names(data_group: "h5py.Group") -> list[str]:
+def sorted_episode_names(data_group: h5py.Group) -> list[str]:
     """Sort standard Isaac episode names numerically and reject other names."""
 
     names = list(data_group.keys())

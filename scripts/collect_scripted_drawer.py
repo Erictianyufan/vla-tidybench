@@ -47,20 +47,27 @@ def _startup_mark(name: str) -> None:
 _startup_mark("app_ready")
 
 import gymnasium as gym  # noqa: E402
+
 _startup_mark("gymnasium")
 import h5py  # noqa: E402
+
 _startup_mark("h5py")
 import numpy as np  # noqa: E402
+
 _startup_mark("numpy")
 import torch  # noqa: E402
+
 _startup_mark("torch")
 from isaaclab.envs.mdp.recorders.recorders_cfg import ActionStateRecorderManagerCfg  # noqa: E402
+
 _startup_mark("recorder_cfg")
 from isaaclab.managers import DatasetExportMode  # noqa: E402
 from isaaclab.utils.math import compute_pose_error  # noqa: E402
+
 _startup_mark("isaac_utils")
 
 from vla_tidybench.isaac import TidyBenchDrawerEnvCfg  # noqa: E402
+
 _startup_mark("drawer_cfg")
 
 
@@ -519,7 +526,11 @@ def main() -> int:
                     env.step(teacher.action())
                     if step % 40 == 0:
                         eef_pos = teacher._eef()[0][0].detach().cpu().tolist()
-                        fixed = None if teacher.fixed_target is None else teacher.fixed_target[0].detach().cpu().tolist()
+                        fixed = (
+                            None
+                            if teacher.fixed_target is None
+                            else teacher.fixed_target[0].detach().cpu().tolist()
+                        )
                         print(
                             f"  step={step} phase={teacher.phase.name} drawer={teacher._drawer_pos():.3f} "
                             f"object_z={float(teacher._object()[0, 2]):.3f} eef={eef_pos} target={fixed}",

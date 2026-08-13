@@ -23,7 +23,6 @@ simulation_app = app_launcher.app
 import gymnasium as gym  # noqa: E402
 import torch  # noqa: E402
 from isaaclab.utils.datasets import HDF5DatasetFileHandler  # noqa: E402
-
 from vla_tidybench.isaac import TidyBenchDrawerEnvCfg  # noqa: E402
 
 

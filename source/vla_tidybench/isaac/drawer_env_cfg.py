@@ -9,20 +9,18 @@ the policy observation group.
 from __future__ import annotations
 
 import isaaclab.sim as sim_utils
-from isaaclab.assets import RigidObjectCfg
-from isaaclab.assets import ArticulationCfg
+from isaaclab.assets import ArticulationCfg, RigidObjectCfg
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import CameraCfg
 from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg, MassPropertiesCfg, RigidBodyPropertiesCfg
 from isaaclab.utils.configclass import configclass
+from isaaclab_assets.robots.franka import FRANKA_PANDA_HIGH_PD_CFG
 from isaaclab_tasks.manager_based.manipulation.cabinet.config.franka.ik_rel_env_cfg import (
     FrankaCabinetEnvCfg,
 )
 from isaaclab_tasks.manager_based.manipulation.stack import mdp as stack_mdp
-from isaaclab_assets.robots.franka import FRANKA_PANDA_HIGH_PD_CFG
-
 
 _FRANKA_TIDYBENCH_INIT_JOINT_POS = {
     "panda_joint1": 0.0444,

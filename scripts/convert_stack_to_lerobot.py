@@ -5,17 +5,12 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import h5py
-from lerobot.common.datasets.lerobot_dataset import HF_LEROBOT_HOME
-from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
-
-from vla_tidybench.data.isaac_hdf5 import ACTION_DIM
-from vla_tidybench.data.isaac_hdf5 import STATE_DIM
-from vla_tidybench.data.isaac_hdf5 import load_episode
-from vla_tidybench.data.isaac_hdf5 import sorted_episode_names
+from lerobot.common.datasets.lerobot_dataset import HF_LEROBOT_HOME, LeRobotDataset
+from vla_tidybench.data.isaac_hdf5 import ACTION_DIM, STATE_DIM, load_episode, sorted_episode_names
 
 
 def main() -> int:

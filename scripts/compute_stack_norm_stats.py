@@ -9,7 +9,6 @@ from pathlib import Path
 
 from vla_tidybench.openpi.stack_config import make_config
 
-
 OPENPI_SCRIPT = Path("/home/ubuntu/openpi/scripts/compute_norm_stats.py")
 
 

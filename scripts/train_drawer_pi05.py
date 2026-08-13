@@ -9,7 +9,6 @@ from pathlib import Path
 
 from vla_tidybench.openpi.drawer_config import make_config
 
-
 OPENPI_TRAIN = Path("/home/ubuntu/openpi/scripts/train.py")
 
 

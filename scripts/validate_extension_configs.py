@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -28,7 +27,10 @@ def main() -> int:
     assert rl["residual"]["dimensions"] == 6
     assert rl["residual"]["gripper_residual"] is False
     assert rl["release_gate"]["fallback"] == rl["base_policy"]
-    print(f"extension contracts passed: Mimic={mimic['generation_num_trials']} trials, OOD={len(seeds)} smoke episodes, RL=frozen-VLA residual")
+    print(
+        f"extension contracts passed: Mimic={mimic['generation_num_trials']} trials, "
+        f"OOD={len(seeds)} smoke episodes, RL=frozen-VLA residual"
+    )
     return 0
 
 

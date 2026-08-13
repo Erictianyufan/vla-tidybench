@@ -6,7 +6,6 @@ from openpi.models import pi0_config
 from openpi.training import config as training_config
 from openpi.training import weight_loaders
 
-
 CONFIG_NAME = "pi05_tidybench_stack_lora"
 REPO_ID = "erictianyufan/vla_tidybench_stack_m1_smoke"
 # The provisioned download contains a truncated first attempt at ``params/``

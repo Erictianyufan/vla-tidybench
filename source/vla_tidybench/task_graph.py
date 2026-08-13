@@ -6,7 +6,7 @@ import enum
 from dataclasses import dataclass
 
 
-class DrawerSkill(str, enum.Enum):
+class DrawerSkill(enum.StrEnum):
     OPEN = "open"
     PICK = "pick"
     PLACE = "place"

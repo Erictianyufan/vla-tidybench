@@ -7,7 +7,6 @@ import argparse
 
 import numpy as np
 from openpi.training import data_loader
-
 from vla_tidybench.openpi.stack_config import make_config
 
 

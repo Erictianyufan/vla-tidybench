@@ -9,7 +9,6 @@ from pathlib import Path
 import h5py
 import numpy as np
 from openpi.policies import policy_config
-
 from vla_tidybench.openpi.drawer_config import make_config
 
 

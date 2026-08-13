@@ -1,8 +1,6 @@
 import numpy as np
 import pytest
-
-from vla_tidybench.data.isaac_hdf5 import canonical_actions
-from vla_tidybench.data.isaac_hdf5 import deployable_state
+from vla_tidybench.data.isaac_hdf5 import canonical_actions, deployable_state
 
 
 def test_converts_isaac_raw_action_to_canonical_physical_action():

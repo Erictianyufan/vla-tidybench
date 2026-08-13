@@ -5,11 +5,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import h5py
-
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = Path("/home/ubuntu/data/vla-tidybench/raw")
@@ -49,7 +48,7 @@ def main() -> int:
     datasets = [dataset_record(skill) for skill in ("open", "pick", "place", "close")]
     manifest = {
         "schema_version": 1,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "release_scope": "cost_bounded_core_chain",
         "dataset": {
             "episodes": len(datasets),

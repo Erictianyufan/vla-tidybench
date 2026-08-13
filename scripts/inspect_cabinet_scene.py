@@ -18,8 +18,8 @@ simulation_app = app_launcher.app
 import gymnasium as gym  # noqa: E402
 import isaaclab_tasks  # noqa: E402, F401
 import torch  # noqa: E402
-from pxr import Usd, UsdGeom  # noqa: E402
 from isaaclab_tasks.utils.parse_cfg import parse_env_cfg  # noqa: E402
+from pxr import Usd, UsdGeom  # noqa: E402
 
 
 def _cpu(value):

@@ -1,5 +1,4 @@
 import pytest
-
 from vla_tidybench.task_graph import DrawerSkill, DrawerTaskGraph
 
 

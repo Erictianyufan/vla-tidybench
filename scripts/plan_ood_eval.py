@@ -22,7 +22,13 @@ def main() -> int:
             if seed in seen_seeds:
                 raise ValueError(f"duplicate evaluation seed: {seed}")
             seen_seeds.add(seed)
-            episodes.append({"bucket": bucket, "seed": seed, "settings": {k: v for k, v in settings.items() if k != "seeds"}})
+            episodes.append(
+                {
+                    "bucket": bucket,
+                    "seed": seed,
+                    "settings": {k: v for k, v in settings.items() if k != "seeds"},
+                }
+            )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps({"schema_version": 1, "episodes": episodes}, indent=2) + "\n", encoding="utf-8")
     print(f"planned {len(episodes)} locked OOD smoke episodes -> {args.output}")

@@ -12,7 +12,6 @@ import h5py
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-
 SKILLS = (
     ("OPEN", "drawer_open_smoke.hdf5", "Open the top drawer"),
     ("PICK", "drawer_pick_smoke.hdf5", "Pick up the red object"),

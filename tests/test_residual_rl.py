@@ -1,5 +1,4 @@
 import numpy as np
-
 from vla_tidybench.rl import ResidualComposer, open_drawer_reward
 
 
