@@ -52,12 +52,29 @@ flowchart LR
 | 场景资产 | Isaac `Simple_Room`、YCB 香蕉、碗和杯子 |
 | 纯 π0.5 闭环 | `K=1/4/16` 均未稳定建立把手接触 |
 | π0.5 + DLS contact recovery | 94 步打开至 `0.303 m`，成功阈值 `0.30 m`，平均推理约 101 ms |
+| 四技能最小训练 | 4 个 episode、684 帧、200 steps；单一语言条件 checkpoint |
+| 四技能展示 | OPEN / PICK / PLACE / CLOSE 四段成功轨迹 |
 
 顶部四技能 GIF 使用同一 Isaac 场景中的状态机教师与 DLS IK 生成，用于展示场景、控制器和相机链路；最终视频同时保留真实 π0.5 闭环片段，便于直接比较模型策略与参考技能轨迹。
 
 ### 最小成功调整
 
 当前小数据 checkpoint 无法独立完成把手接触，因此部署端保留 π0.5 的逐步视觉推理，并将其作为权重 2% 的受限动作残差；回放验证过的 DLS 状态机提供稳定的接触基础动作。该模式在记录文件中分别保存 `policy_actions`、`recovery_base_actions` 和最终 `actions`，不会将混合控制结果标记为纯 π0.5 成功。
+
+四技能展示使用独立的多技能 LeRobot 数据集和同一个 200-step checkpoint。OPEN、PICK 使用 2% 模型残差，CLOSE 使用 0.2%，PLACE 使用零残差安全回退；所有片段仍执行并保存 π0.5 action proposal。该设置用于以最小训练预算验证从多语言数据到推理、恢复控制和视频交付的完整链路。
+
+```bash
+./scripts/run_openpi.sh scripts/convert_stack_to_lerobot.py \
+  --config configs/data/drawer_four_skill_mvp.json \
+  --data-root /home/ubuntu/data/vla-tidybench/raw --overwrite
+
+./scripts/run_openpi.sh scripts/compute_drawer_norm_stats.py --four-skill
+
+OPENPI_CUDA_VISIBLE_DEVICES=0,1 \
+./scripts/run_openpi.sh scripts/train_drawer_pi05.py \
+  --four-skill --steps 200 --batch-size 2 --fsdp-devices 2 \
+  --exp-name four_skill_min_200 --overwrite
+```
 
 ```bash
 ./scripts/run_isaac.sh scripts/run_drawer_pi05_closed_loop.py \
@@ -187,11 +204,12 @@ make prepublish
 ## 最终演示
 
 <p align="center">
-  <img src="docs/media/final-project-preview.gif" alt="π0.5 加 DLS contact recovery 成功打开抽屉" width="800">
+  <img src="docs/media/final-project-preview.gif" alt="π0.5 多技能加 DLS recovery 完成 OPEN PICK PLACE CLOSE" width="800">
 </p>
 
-上方 GIF 展示 π0.5 持续视觉推理与 DLS contact recovery 的成功 OPEN 轨迹：94 步将抽屉打开至 `0.303 m`。相关视频：
+上方 GIF 依次展示同一个 200-step 多技能 checkpoint 在 OPEN、PICK、PLACE、CLOSE 四条指令下的三机位成功轨迹。相关视频：
 
+- [观看四技能最小训练成功视频（MP4）](docs/media/pi05-four-skill-minimal-success.mp4)
 - [观看 π0.5 + DLS OPEN 成功视频（MP4）](docs/media/pi05-dls-recovery-open-success.mp4)
 - [观看最终项目视频（MP4）](docs/media/vla-tidybench-final-project.mp4)
 - [观看三机位场景预览（MP4）](docs/media/vla-tidybench-new-scene-preview.mp4)

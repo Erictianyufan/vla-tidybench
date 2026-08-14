@@ -7,7 +7,8 @@ import argparse
 import importlib.util
 from pathlib import Path
 
-from vla_tidybench.openpi.drawer_config import make_config
+from vla_tidybench.openpi.drawer_config import make_config as make_open_config
+from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
 
 OPENPI_TRAIN = Path("/home/ubuntu/openpi/scripts/train.py")
 
@@ -20,6 +21,7 @@ def main() -> int:
     parser.add_argument("--exp-name", default="smoke")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--four-skill", action="store_true")
     args = parser.parse_args()
     if min(args.steps, args.batch_size, args.fsdp_devices) < 1:
         parser.error("steps, batch-size and fsdp-devices must be positive")
@@ -33,6 +35,7 @@ def main() -> int:
         raise RuntimeError(f"cannot load {OPENPI_TRAIN}")
     official = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(official)
+    make_config = make_four_skill_config if args.four_skill else make_open_config
     config = make_config(
         exp_name=args.exp_name,
         num_train_steps=args.steps,

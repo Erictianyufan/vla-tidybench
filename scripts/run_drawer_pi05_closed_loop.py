@@ -39,8 +39,6 @@ AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 if args_cli.dls_contact_recovery and args_cli.teacher_preview:
     parser.error("--dls-contact-recovery and --teacher-preview are mutually exclusive")
-if args_cli.dls_contact_recovery and args_cli.execute_steps != 1:
-    parser.error("DLS contact recovery requires --execute-steps 1")
 if not 0.0 <= args_cli.policy_residual_weight <= 0.1:
     parser.error("--policy-residual-weight must be in [0, 0.1]")
 app_launcher = AppLauncher(args_cli)
@@ -77,9 +75,10 @@ def main() -> int:
     cfg = TidyBenchDrawerShowcaseEnvCfg() if args_cli.showcase else TidyBenchDrawerEnvCfg()
     cfg.sim.device = args_cli.device
     cfg.scene.num_envs = 1
-    if args_cli.teacher_preview and args_cli.teacher_skill in ("place", "close"):
+    assisted_run = args_cli.teacher_preview or args_cli.dls_contact_recovery
+    if assisted_run and args_cli.teacher_skill in ("place", "close"):
         cfg.scene.cabinet.init_state.joint_pos["drawer_top_joint"] = 0.36
-    if args_cli.teacher_preview and args_cli.teacher_skill == "place":
+    if assisted_run and args_cli.teacher_skill == "place":
         cfg.scene.cabinet.actuators["drawers"].stiffness = 10000.0
         cfg.scene.cabinet.actuators["drawers"].damping = 500.0
     env = gym.make("Isaac-Open-Drawer-Franka-IK-Rel-v0", cfg=cfg).unwrapped
@@ -128,6 +127,7 @@ def main() -> int:
                 recovery_actions = np.asarray(demo["actions"], dtype=np.float32)
         try:
             step = 0
+            recovery_exhausted = False
             while step < args_cli.max_steps and simulation_app.is_running():
                 table, wrist, state = _obs(env)
                 if teacher_actions is not None:
@@ -154,6 +154,7 @@ def main() -> int:
                     executed = physical.copy()
                     if recovery_actions is not None:
                         if step >= len(recovery_actions):
+                            recovery_exhausted = True
                             break
                         base_physical = adapter.from_isaac(recovery_actions[step])
                         executed = base_physical.copy()
@@ -191,12 +192,15 @@ def main() -> int:
                     elif args_cli.teacher_skill == "close":
                         teacher_length = 0 if teacher_actions is None else len(teacher_actions)
                         success = drawer <= 0.04 and step >= min(40, teacher_length)
-                        break
+                        if success:
+                            break
                 print(
                     f"step={step} drawer={drawer:.3f} infer_ms={latencies[-1]:.1f} success={success}",
                     flush=True,
                 )
                 if success:
+                    break
+                if recovery_exhausted:
                     break
         finally:
             if client_context is not None:
@@ -211,7 +215,11 @@ def main() -> int:
                 policy_name = "pi0.5-drawer-lora"
             output.attrs["policy"] = policy_name
             output.attrs["prompt"] = args_cli.prompt
-            output.attrs["skill"] = args_cli.teacher_skill if teacher_actions is not None else "open"
+            output.attrs["skill"] = (
+                args_cli.teacher_skill
+                if teacher_actions is not None or recovery_actions is not None
+                else "open"
+            )
             output.attrs["success"] = success
             output.attrs["mean_infer_ms"] = float(np.mean(latencies)) if latencies else -1.0
             output.attrs["policy_residual_weight"] = (

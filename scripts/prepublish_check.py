@@ -15,6 +15,7 @@ MAX_PREVIEW_BYTES = 10 * 1024 * 1024
 
 ALLOWED_DEMO_VIDEOS = {
     Path("docs/media/pi05-dls-recovery-open-success.mp4"),
+    Path("docs/media/pi05-four-skill-minimal-success.mp4"),
     Path("docs/media/vla-tidybench-final-project.mp4"),
     Path("docs/media/vla-tidybench-new-scene-preview.mp4"),
 }

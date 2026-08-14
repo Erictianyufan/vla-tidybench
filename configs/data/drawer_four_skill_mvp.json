@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "repo_id": "erictianyufan/vla_tidybench_drawer_four_skill_mvp",
+  "fps": 20,
+  "image_writer_threads": 8,
+  "sources": [
+    {
+      "file": "drawer_open_smoke.hdf5",
+      "episode_indices": [0],
+      "prompt": "open the top drawer"
+    },
+    {
+      "file": "drawer_pick_smoke.hdf5",
+      "episode_indices": [0],
+      "prompt": "pick up the red object"
+    },
+    {
+      "file": "drawer_place_smoke.hdf5",
+      "episode_indices": [0],
+      "prompt": "put the red object into the top drawer"
+    },
+    {
+      "file": "drawer_close_smoke.hdf5",
+      "episode_indices": [0],
+      "prompt": "close the top drawer"
+    }
+  ]
+}

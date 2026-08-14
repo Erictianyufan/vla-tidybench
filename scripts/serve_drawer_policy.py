@@ -9,7 +9,8 @@ from pathlib import Path
 
 from openpi.policies import policy_config
 from openpi.serving.websocket_policy_server import WebsocketPolicyServer
-from vla_tidybench.openpi.drawer_config import make_config
+from vla_tidybench.openpi.drawer_config import make_config as make_open_config
+from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
 
 
 def main() -> None:
@@ -18,7 +19,9 @@ def main() -> None:
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--default-prompt", default="open the top drawer")
+    parser.add_argument("--four-skill", action="store_true")
     args = parser.parse_args()
+    make_config = make_four_skill_config if args.four_skill else make_open_config
     policy = policy_config.create_trained_policy(
         make_config(), args.checkpoint, default_prompt=args.default_prompt
     )
