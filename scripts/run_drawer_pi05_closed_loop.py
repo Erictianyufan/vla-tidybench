@@ -50,7 +50,6 @@ import gymnasium as gym  # noqa: E402
 import h5py  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
-
 from vla_tidybench.isaac import TidyBenchDrawerEnvCfg, TidyBenchDrawerShowcaseEnvCfg  # noqa: E402
 from vla_tidybench.policy_bridge.action_adapter import ActionAdapter  # noqa: E402
 from vla_tidybench.policy_bridge.safety_guard import SafetyGuard  # noqa: E402
@@ -108,7 +107,11 @@ def main() -> int:
             )
             for _ in range(3):
                 env.sim.render()
-        client_context = None if args_cli.teacher_preview else PolicyClient(args_cli.host, args_cli.port, timeout_s=120.0)
+        client_context = (
+            None
+            if args_cli.teacher_preview
+            else PolicyClient(args_cli.host, args_cli.port, timeout_s=120.0)
+        )
         if client_context is not None:
             print("policy metadata", json.dumps(client_context.metadata, indent=2, default=str), flush=True)
         teacher_actions = None
@@ -179,7 +182,12 @@ def main() -> int:
                         success = float(obj[2]) >= 0.12
                     elif args_cli.teacher_skill == "place":
                         handle_x = env.scene["cabinet_frame"].data.target_pos_w.torch[0, 0, 0]
-                        success = bool(obj[2] > 0.68 and obj[2] < 0.86 and obj[0] > handle_x + 0.023 and abs(obj[1]) < 0.26)
+                        success = bool(
+                            obj[2] > 0.68
+                            and obj[2] < 0.86
+                            and obj[0] > handle_x + 0.023
+                            and abs(obj[1]) < 0.26
+                        )
                     elif args_cli.teacher_skill == "close":
                         teacher_length = 0 if teacher_actions is None else len(teacher_actions)
                         success = drawer <= 0.04 and step >= min(40, teacher_length)

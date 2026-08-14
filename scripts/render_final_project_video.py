@@ -12,7 +12,6 @@ import h5py
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-
 WIDTH, HEIGHT, FPS = 1280, 720, 20
 
 
@@ -76,14 +75,58 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     frames: list[np.ndarray] = []
-    frames += card("VLA-TidyBench", ["Simulation-first embodied AI project", "Franka drawer manipulation in a furnished Isaac Sim scene", "Data -> pi0.5 LoRA -> policy server -> closed-loop deployment"])
-    frames += card("Minimal data and training", ["8 successful OPEN demonstrations | 1,092 RGB frames", "OpenPI pi0.5 LoRA | 500 steps | 2 x RTX 4090", "Final training loss: 0.0316 | warm inference: about 96 ms"])
-    frames += recording_frames(args.policy_attempt, label="Real pi0.5 LoRA closed-loop rollout", outcome="OPEN GATE NOT PASSED", limit=120)
-    frames += card("Observed model result", ["The complete training and deployment chain executed successfully.", "The small-data policy moved near the cabinet but did not establish a stable handle contact.", "This unsuccessful rollout is retained instead of being presented as a policy success."])
-    frames += recording_frames(args.teacher, label="Scripted teacher | scene and camera validation", outcome="OPEN SUCCESS")
-    frames += card("Verified four-skill suite", ["OPEN | PICK | PLACE | CLOSE", "Truth-guided teacher + task-space waypoints + DLS inverse kinematics", "The following reel is a teacher demonstration, not pi0.5 inference."])
+    frames += card(
+        "VLA-TidyBench",
+        [
+            "Simulation-first embodied AI project",
+            "Franka drawer manipulation in a furnished Isaac Sim scene",
+            "Data -> pi0.5 LoRA -> policy server -> closed-loop deployment",
+        ],
+    )
+    frames += card(
+        "Minimal data and training",
+        [
+            "8 successful OPEN demonstrations | 1,092 RGB frames",
+            "OpenPI pi0.5 LoRA | 500 steps | 2 x RTX 4090",
+            "Final training loss: 0.0316 | warm inference: about 96 ms",
+        ],
+    )
+    frames += recording_frames(
+        args.policy_attempt,
+        label="Real pi0.5 LoRA closed-loop rollout",
+        outcome="OPEN GATE NOT PASSED",
+        limit=120,
+    )
+    frames += card(
+        "Observed model result",
+        [
+            "The complete training and deployment chain executed successfully.",
+            "The small-data policy moved near the cabinet but did not establish a stable handle contact.",
+            "This unsuccessful rollout is retained instead of being presented as a policy success.",
+        ],
+    )
+    frames += recording_frames(
+        args.teacher,
+        label="Scripted teacher | scene and camera validation",
+        outcome="OPEN SUCCESS",
+    )
+    frames += card(
+        "Verified four-skill suite",
+        [
+            "OPEN | PICK | PLACE | CLOSE",
+            "Truth-guided teacher + task-space waypoints + DLS inverse kinematics",
+            "The following reel is a teacher demonstration, not pi0.5 inference.",
+        ],
+    )
     frames += decode_video(args.skills)
-    frames += card("Project status", ["Completed: simulator, data, LoRA, checkpoint, policy bridge, closed loop, video", "Preserved: Mimic, OOD evaluation, and frozen-VLA residual-RL extension contracts", "Next: add diverse handle-contact data before further policy optimization"])
+    frames += card(
+        "Project status",
+        [
+            "Completed: simulator, data, LoRA, checkpoint, policy bridge, closed loop, video",
+            "Preserved: Mimic, OOD evaluation, and frozen-VLA residual-RL extension contracts",
+            "Next: add diverse handle-contact data before further policy optimization",
+        ],
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     ffmpeg = os.environ.get("FFMPEG_BIN", "ffmpeg")
     command = [ffmpeg, "-hide_banner", "-loglevel", "warning", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",

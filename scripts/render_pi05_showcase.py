@@ -50,7 +50,12 @@ def main() -> None:
             heading = "VLA-TidyBench | Real pi0.5 LoRA closed loop"
         draw.text((22, 10), heading, font=font, fill=(96, 216, 255))
         draw.text((22, 42), f'Prompt: "{prompt}"', font=small, fill="white")
-        draw.text((1000, 16), "SUCCESS" if success else "ATTEMPT", font=font, fill=(80, 230, 130) if success else (255, 190, 80))
+        draw.text(
+            (1000, 16),
+            "SUCCESS" if success else "ATTEMPT",
+            font=font,
+            fill=(80, 230, 130) if success else (255, 190, 80),
+        )
         draw.rectangle((811, 451, 1039, 679), outline=(96, 216, 255), width=3)
         draw.rectangle((1041, 451, 1269, 679), outline=(96, 216, 255), width=3)
         draw.text((820, 680), "table camera", font=small, fill="white")

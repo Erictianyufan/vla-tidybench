@@ -11,7 +11,6 @@ import imageio.v3 as iio
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-
 SKILLS = ("OPEN", "PICK", "PLACE", "CLOSE")
 PROMPTS = {
     "OPEN": "Open the top drawer",
@@ -53,7 +52,15 @@ def skill_grid(paths: list[Path], output: Path, frames: int = 48) -> None:
                 grid.paste(view, ((slot % 2) * 480, (slot // 2) * 270))
             output_frames.append(grid.quantize(colors=96, method=Image.Quantize.MEDIANCUT))
         output.parent.mkdir(parents=True, exist_ok=True)
-        output_frames[0].save(output, save_all=True, append_images=output_frames[1:], duration=167, loop=0, optimize=True, disposal=2)
+        output_frames[0].save(
+            output,
+            save_all=True,
+            append_images=output_frames[1:],
+            duration=167,
+            loop=0,
+            optimize=True,
+            disposal=2,
+        )
     finally:
         for source in sources:
             source.close()

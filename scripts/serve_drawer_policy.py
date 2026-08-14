@@ -9,7 +9,6 @@ from pathlib import Path
 
 from openpi.policies import policy_config
 from openpi.serving.websocket_policy_server import WebsocketPolicyServer
-
 from vla_tidybench.openpi.drawer_config import make_config
 
 
