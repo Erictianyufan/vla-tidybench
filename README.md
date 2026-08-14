@@ -174,7 +174,7 @@ OPENPI_CUDA_VISIBLE_DEVICES=1 \
 
 策略观测为 `table RGB + wrist RGB + q/qdot + prompt`。抽屉关节只参与成功判定，不作为模型输入。
 
-### 5. 生成四技能与最终视频 GIF
+### 5. 生成视频 GIF
 
 先生成四个三机位技能轨迹，再运行：
 
@@ -187,6 +187,9 @@ OPENPI_CUDA_VISIBLE_DEVICES=1 \
   --final-video artifacts/demo/vla-tidybench-final-project.mp4 \
   --skill-gif docs/media/four-skills-2x2.gif \
   --final-gif docs/media/final-project-preview.gif
+
+# 为 docs/media 中的每个 MP4 生成同名 GIF 预览
+make media-gifs
 ```
 
 ## 四个原子技能
@@ -233,14 +236,21 @@ make prepublish
 
 ## 最终演示
 
-<p align="center">
-  <img src="docs/media/final-project-preview.gif" alt="π0.5 多技能加 DLS recovery 完成 OPEN PICK PLACE CLOSE" width="800">
-</p>
+每个演示视频均提供同名 GIF，可直接在 README 中预览；点击标题可观看带更高画质和完整帧率的 MP4。
 
-上方 GIF 依次展示同一个 200-step 多技能 checkpoint 在 OPEN、PICK、PLACE、CLOSE 四条指令下的三机位成功轨迹。相关视频：
+| 四技能最小训练成功 | 完整项目成片 |
+| --- | --- |
+| <img src="docs/media/pi05-four-skill-minimal-success.gif" alt="π0.5 四技能最小训练成功" width="460"> | <img src="docs/media/vla-tidybench-final-project.gif" alt="VLA-TidyBench 完整项目成片" width="460"> |
+| [观看 MP4](docs/media/pi05-four-skill-minimal-success.mp4) | [观看 MP4](docs/media/vla-tidybench-final-project.mp4) |
 
-- [观看四技能最小训练成功视频（MP4）](docs/media/pi05-four-skill-minimal-success.mp4)
-- [观看 π0.5 + DLS OPEN 成功视频（MP4）](docs/media/pi05-dls-recovery-open-success.mp4)
-- [观看 PICK Residual SAC 成功对比视频（MP4）](docs/media/pick-residual-sac-demo.mp4)
-- [观看最终项目视频（MP4）](docs/media/vla-tidybench-final-project.mp4)
-- [观看三机位场景预览（MP4）](docs/media/vla-tidybench-new-scene-preview.mp4)
+| π0.5 + DLS OPEN 成功 | PICK Residual SAC 对比 |
+| --- | --- |
+| <img src="docs/media/pi05-dls-recovery-open-success.gif" alt="π0.5 加 DLS recovery 完成 OPEN" width="460"> | <img src="docs/media/pick-residual-sac-demo.gif" alt="PICK 零残差失败与 Residual SAC 成功对比" width="460"> |
+| [观看 MP4](docs/media/pi05-dls-recovery-open-success.mp4) | [观看 MP4](docs/media/pick-residual-sac-demo.mp4) |
+
+| 三机位真实资产场景预览 |
+| --- |
+| <img src="docs/media/vla-tidybench-new-scene-preview.gif" alt="机械臂、抽屉与 YCB 日用品三机位场景" width="720"> |
+| [观看 MP4](docs/media/vla-tidybench-new-scene-preview.mp4) |
+
+四技能视频依次展示同一个 200-step 多技能 checkpoint 在 OPEN、PICK、PLACE、CLOSE 四条指令下的三机位成功轨迹；完整项目成片进一步串联场景、技能与模型闭环结果。

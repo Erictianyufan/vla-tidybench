@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-train drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo pick-rl-train pick-rl-record extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
+.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-train drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
@@ -101,6 +101,9 @@ pick-rl-record:
 		--mode record --device cuda:0 --enable_cameras --viz none --showcase \
 		--checkpoint /home/ubuntu/data/vla-tidybench/checkpoints/pick_residual_sac_tomato \
 		--output /home/ubuntu/data/vla-tidybench/eval/pick_residual_tomato_rl_success.hdf5
+
+media-gifs:
+	./scripts/run_openpi.sh scripts/render_all_video_gifs.py --media-dir docs/media
 
 extension-smoke:
 	/home/ubuntu/env_isaaclab/bin/python scripts/validate_extension_configs.py
