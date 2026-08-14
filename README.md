@@ -276,11 +276,6 @@ make prepublish
 
 每个演示视频均提供同名 GIF，可直接在 README 中预览；点击标题可观看带更高画质和完整帧率的 MP4。
 
-| 连续药瓶长任务：OPEN → PICK → PLACE → CLOSE |
-| --- |
-| <img src="docs/media/pi05-continuous-medicine-demo.gif" alt="药瓶四技能连续长任务成功" width="920"> |
-| [观看三机位 MP4](docs/media/pi05-continuous-medicine-demo.mp4) |
-
 | 四个原子技能 2×2 三机位展示 |
 | --- |
 | <img src="docs/media/four-skills-2x2.gif" alt="OPEN、PICK、PLACE、CLOSE 四个原子技能三机位展示" width="920"> |
@@ -300,4 +295,15 @@ make prepublish
 | <img src="docs/media/vla-tidybench-new-scene-preview.gif" alt="机械臂、抽屉与日用品三机位场景" width="720"> |
 | [观看 MP4](docs/media/vla-tidybench-new-scene-preview.mp4) |
 
-连续药瓶视频是最终主展示：同一个仿真 episode 中无重置完成四阶段，并逐步保存 π0.5 proposal 与 DLS 安全恢复后的执行动作。分段四技能和 2×2 GIF 用于观察单技能细节；Residual SAC 视频则保留为独立的历史番茄罐标定恢复实验。
+### 最终连续任务：药瓶收纳
+
+| OPEN → PICK → PLACE → CLOSE 连续成功 |
+| --- |
+| <img src="docs/media/pi05-continuous-medicine-demo.gif" alt="Franka 连续打开抽屉、抓取药瓶、放入药瓶并关闭抽屉" width="920"> |
+| [观看完整三机位 MP4](docs/media/pi05-continuous-medicine-demo.mp4) |
+
+该 GIF 是项目的最终主展示。Franka 在同一个仿真 episode 中打开抽屉、抓取药瓶、将药瓶放入抽屉并关闭抽屉，四个阶段之间没有重置或轨迹拼接。完整轨迹包含 438 个控制步，以 20 FPS 导出约 21.9 秒的视频；画面同时展示全景、桌面相机和腕部相机。
+
+运行过程中，四技能 π0.5 checkpoint 根据当前阶段接收对应语言提示，每 4 步生成一次动作块；DLS 状态机提供接触安全与失败恢复，最终执行动作包含权重为 `0.0001` 的模型残差。因此该结果定义为 **π0.5-assisted closed loop**，用于证明从语言条件推理、策略服务、仿真执行到视频交付的完整链路已经贯通，而不是宣称纯 π0.5 在小数据条件下独立完成长任务。
+
+分段四技能和 2×2 GIF 用于观察单技能细节；Residual SAC 视频保留为独立的历史番茄罐标定恢复实验。
