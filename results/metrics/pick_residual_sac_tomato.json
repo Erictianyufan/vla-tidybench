@@ -1,0 +1,32 @@
+{
+  "algorithm": "SAC",
+  "timesteps": 200,
+  "calibration_bias": 0.035,
+  "initialization": "known_calibration_compensation_prior",
+  "training_episode_success_rate": 0.5,
+  "evaluation": [
+    {
+      "episode": 0,
+      "success": true,
+      "steps": 67,
+      "return": 18.602,
+      "final_object_z": 0.1201
+    },
+    {
+      "episode": 1,
+      "success": true,
+      "steps": 67,
+      "return": 18.602,
+      "final_object_z": 0.1201
+    },
+    {
+      "episode": 2,
+      "success": true,
+      "steps": 67,
+      "return": 18.602,
+      "final_object_z": 0.1201
+    }
+  ],
+  "evaluation_success_rate": 1.0,
+  "checkpoint": "/home/ubuntu/data/vla-tidybench/checkpoints/pick_residual_sac_tomato.zip"
+}

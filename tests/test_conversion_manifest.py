@@ -13,8 +13,8 @@ def test_drawer_manifest_has_four_atomic_skills() -> None:
     prompts = {source["prompt"] for source in config["sources"]}
     assert prompts == {
         "open the top drawer",
-        "pick up the red object",
-        "put the red object into the top drawer",
+        "pick up the tomato soup can",
+        "put the tomato soup can into the top drawer",
         "close the top drawer",
     }
     assert all(source["episode_indices"] == [0] for source in config["sources"])

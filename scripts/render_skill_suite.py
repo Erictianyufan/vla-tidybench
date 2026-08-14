@@ -14,8 +14,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 SKILLS = (
     ("OPEN", "drawer_open_smoke.hdf5", "Open the top drawer"),
-    ("PICK", "drawer_pick_smoke.hdf5", "Pick up the red object"),
-    ("PLACE", "drawer_place_smoke.hdf5", "Put the red object into the top drawer"),
+    ("PICK", "drawer_pick_smoke.hdf5", "Pick up the tomato soup can"),
+    ("PLACE", "drawer_place_smoke.hdf5", "Put the tomato soup can into the top drawer"),
     ("CLOSE", "drawer_close_smoke.hdf5", "Close the top drawer"),
 )
 

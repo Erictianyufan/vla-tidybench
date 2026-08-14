@@ -1,7 +1,7 @@
-"""Franka cabinet scene used by VLA-TidyBench.
+"""Franka home-cabinet grocery scene used by VLA-TidyBench.
 
 The class extends Isaac Lab's verified DLS IK-relative drawer task with two
-deployable RGB observations and a red target object.  Simulator truth remains
+deployable RGB observations and a YCB grocery target.  Simulator truth remains
 available to scripted teachers and metrics, but is deliberately excluded from
 the policy observation group.
 """
@@ -60,7 +60,7 @@ class TidyBenchObservationsCfg:
 
 @configclass
 class TidyBenchDrawerEnvCfg(FrankaCabinetEnvCfg):
-    """One-env-ready drawer scene with a graspable red target object."""
+    """One-env-ready drawer scene with a graspable YCB tomato-soup can."""
 
     observations: TidyBenchObservationsCfg = TidyBenchObservationsCfg()
 
@@ -97,23 +97,20 @@ class TidyBenchDrawerEnvCfg(FrankaCabinetEnvCfg):
             max_depenetration_velocity=2.0,
             disable_gravity=False,
         )
+        asset_root = "/home/ubuntu/readonly/Assets/Isaac/4.5/Isaac"
         self.scene.target_object = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/TargetObject",
             # Keep the pick zone in front of the open drawer front.  Placing
             # the object farther back causes a lifted grasp to collide with
             # the top-drawer fascia when the drawer starts open.
-            init_state=RigidObjectCfg.InitialStateCfg(pos=(0.20, -0.20, 0.020), rot=(0.0, 0.0, 0.0, 1.0)),
-            spawn=sim_utils.CuboidCfg(
-                size=(0.045, 0.045, 0.040),
+            init_state=RigidObjectCfg.InitialStateCfg(pos=(0.20, -0.20, 0.030), rot=(0.0, 0.0, 0.0, 1.0)),
+            spawn=sim_utils.UsdFileCfg(
+                usd_path=f"{asset_root}/Props/YCB/Axis_Aligned_Physics/005_tomato_soup_can.usd",
+                scale=(0.55, 0.55, 0.55),
                 rigid_props=target_props,
                 collision_props=CollisionPropertiesCfg(),
-                mass_props=MassPropertiesCfg(mass=0.04),
-                visual_material=sim_utils.PreviewSurfaceCfg(
-                    diffuse_color=(0.82, 0.03, 0.03),
-                    roughness=0.35,
-                    metallic=0.0,
-                ),
-                semantic_tags=[("class", "red_target_object")],
+                mass_props=MassPropertiesCfg(mass=0.08),
+                semantic_tags=[("class", "tomato_soup_can")],
             ),
         )
 
@@ -195,7 +192,7 @@ class TidyBenchDrawerShowcaseEnvCfg(TidyBenchDrawerEnvCfg):
                 usd_path=f"{asset_root}/Props/YCB/Axis_Aligned/011_banana.usd",
                 scale=(0.65, 0.65, 0.65),
             ),
-            init_state=AssetBaseCfg.InitialStateCfg(pos=(0.30, 0.32, 0.04)),
+            init_state=AssetBaseCfg.InitialStateCfg(pos=(0.25, -0.52, 0.04)),
         )
         self.scene.bowl = AssetBaseCfg(
             prim_path="{ENV_REGEX_NS}/Decor/Bowl",
@@ -203,7 +200,7 @@ class TidyBenchDrawerShowcaseEnvCfg(TidyBenchDrawerEnvCfg):
                 usd_path=f"{asset_root}/Props/YCB/Axis_Aligned/024_bowl.usd",
                 scale=(0.65, 0.65, 0.65),
             ),
-            init_state=AssetBaseCfg.InitialStateCfg(pos=(0.55, 0.37, 0.035)),
+            init_state=AssetBaseCfg.InitialStateCfg(pos=(0.52, -0.54, 0.035)),
         )
         self.scene.mug = AssetBaseCfg(
             prim_path="{ENV_REGEX_NS}/Decor/Mug",
@@ -211,7 +208,23 @@ class TidyBenchDrawerShowcaseEnvCfg(TidyBenchDrawerEnvCfg):
                 usd_path=f"{asset_root}/Props/YCB/Axis_Aligned/025_mug.usd",
                 scale=(0.65, 0.65, 0.65),
             ),
-            init_state=AssetBaseCfg.InitialStateCfg(pos=(0.72, 0.34, 0.05)),
+            init_state=AssetBaseCfg.InitialStateCfg(pos=(0.74, -0.52, 0.05)),
+        )
+        self.scene.mustard_bottle = AssetBaseCfg(
+            prim_path="{ENV_REGEX_NS}/Decor/MustardBottle",
+            spawn=sim_utils.UsdFileCfg(
+                usd_path=f"{asset_root}/Props/YCB/Axis_Aligned/006_mustard_bottle.usd",
+                scale=(0.65, 0.65, 0.65),
+            ),
+            init_state=AssetBaseCfg.InitialStateCfg(pos=(0.95, -0.48, 0.055)),
+        )
+        self.scene.cracker_box = AssetBaseCfg(
+            prim_path="{ENV_REGEX_NS}/Decor/CrackerBox",
+            spawn=sim_utils.UsdFileCfg(
+                usd_path=f"{asset_root}/Props/YCB/Axis_Aligned/003_cracker_box.usd",
+                scale=(0.52, 0.52, 0.52),
+            ),
+            init_state=AssetBaseCfg.InitialStateCfg(pos=(1.16, -0.42, 0.09)),
         )
         # Same viewing direction as the audited table camera, pulled back to
         # include the complete Franka, cabinet, tabletop, and room context.

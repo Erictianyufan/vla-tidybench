@@ -74,10 +74,10 @@ _startup_mark("drawer_cfg")
 TEACHER_VERSION = "tidybench_truth_fsm_dls_v1"
 PROMPTS = {
     "open": "open the top drawer",
-    "pick": "pick up the red object",
-    "place": "put the red object into the top drawer",
+    "pick": "pick up the tomato soup can",
+    "place": "put the tomato soup can into the top drawer",
     "close": "close the top drawer",
-    "full": "put the red object into the top drawer and close it",
+    "full": "put the tomato soup can into the top drawer and close it",
 }
 
 

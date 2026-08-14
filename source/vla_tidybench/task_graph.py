@@ -33,8 +33,8 @@ class DrawerTaskGraph:
     def prompt(self) -> str:
         prompts = {
             DrawerSkill.OPEN: "open the top drawer",
-            DrawerSkill.PICK: "pick up the red object",
-            DrawerSkill.PLACE: "put the red object into the top drawer",
+            DrawerSkill.PICK: "pick up the tomato soup can",
+            DrawerSkill.PLACE: "put the tomato soup can into the top drawer",
             DrawerSkill.CLOSE: "close the top drawer",
         }
         if self.current not in prompts:

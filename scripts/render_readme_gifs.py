@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 SKILLS = ("OPEN", "PICK", "PLACE", "CLOSE")
 PROMPTS = {
     "OPEN": "Open the top drawer",
-    "PICK": "Pick up the red object",
+    "PICK": "Pick up the tomato soup can",
     "PLACE": "Put the object in the drawer",
     "CLOSE": "Close the top drawer",
 }

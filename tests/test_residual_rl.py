@@ -1,5 +1,5 @@
 import numpy as np
-from vla_tidybench.rl import ResidualComposer, open_drawer_reward
+from vla_tidybench.rl import ResidualComposer, open_drawer_reward, pick_residual_reward
 
 
 def test_zero_residual_is_exactly_nominal() -> None:
@@ -27,3 +27,34 @@ def test_successful_progress_outranks_stalling() -> None:
         previous_q=0.29, current_q=0.31, contact=True, collision=False, residual_norm=0.1, success=True
     )
     assert success["total"] > moving["total"] > stalled["total"]
+
+
+def test_pick_reward_prefers_lift_and_success() -> None:
+    stalled = pick_residual_reward(
+        previous_distance=0.1,
+        current_distance=0.1,
+        previous_object_z=0.02,
+        current_object_z=0.02,
+        residual_norm=0.0,
+        success=False,
+        truncated=False,
+    )
+    lifted = pick_residual_reward(
+        previous_distance=0.1,
+        current_distance=0.08,
+        previous_object_z=0.02,
+        current_object_z=0.04,
+        residual_norm=0.1,
+        success=False,
+        truncated=False,
+    )
+    success = pick_residual_reward(
+        previous_distance=0.03,
+        current_distance=0.03,
+        previous_object_z=0.11,
+        current_object_z=0.12,
+        residual_norm=0.1,
+        success=True,
+        truncated=False,
+    )
+    assert success["total"] > lifted["total"] > stalled["total"]

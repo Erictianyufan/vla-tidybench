@@ -36,6 +36,7 @@ results/metrics/*.jsonl
 !docs/media/vla-tidybench-final-project.mp4
 !docs/media/pi05-dls-recovery-open-success.mp4
 !docs/media/pi05-four-skill-minimal-success.mp4
+!docs/media/pick-residual-sac-demo.mp4
 
 # Credentials and host-specific access material.
 *.pem

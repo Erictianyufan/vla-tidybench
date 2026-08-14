@@ -12,12 +12,12 @@
     {
       "file": "drawer_pick_smoke.hdf5",
       "episode_indices": [0],
-      "prompt": "pick up the red object"
+      "prompt": "pick up the tomato soup can"
     },
     {
       "file": "drawer_place_smoke.hdf5",
       "episode_indices": [0],
-      "prompt": "put the red object into the top drawer"
+      "prompt": "put the tomato soup can into the top drawer"
     },
     {
       "file": "drawer_close_smoke.hdf5",

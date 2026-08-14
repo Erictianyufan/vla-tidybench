@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-train drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
+.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-train drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo pick-rl-train pick-rl-record extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
@@ -89,6 +89,18 @@ drawer-demo:
 	./scripts/run_openpi.sh scripts/render_skill_suite.py \
 		--data-root /home/ubuntu/data/vla-tidybench/raw \
 		--output artifacts/demo/vla-tidybench-skill-suite.mp4
+
+pick-rl-train:
+	./scripts/run_isaac.sh scripts/train_pick_residual_sac.py \
+		--mode train --device cuda:0 --viz none --timesteps $${RL_STEPS:-200} \
+		--checkpoint /home/ubuntu/data/vla-tidybench/checkpoints/pick_residual_sac_tomato \
+		--metrics results/metrics/pick_residual_sac_tomato.json
+
+pick-rl-record:
+	./scripts/run_isaac.sh scripts/train_pick_residual_sac.py \
+		--mode record --device cuda:0 --enable_cameras --viz none --showcase \
+		--checkpoint /home/ubuntu/data/vla-tidybench/checkpoints/pick_residual_sac_tomato \
+		--output /home/ubuntu/data/vla-tidybench/eval/pick_residual_tomato_rl_success.hdf5
 
 extension-smoke:
 	/home/ubuntu/env_isaaclab/bin/python scripts/validate_extension_configs.py

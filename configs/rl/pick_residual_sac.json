@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "name": "pick_calibration_recovery_residual_sac",
+  "scenario": "home_cabinet_dropped_grocery_recovery",
+  "base_controller": "frozen_pi05_proposal_plus_dls_recovery",
+  "base_controller_frozen": true,
+  "skill": "pick_tomato_soup_can",
+  "algorithm": "SAC",
+  "experiment": "recover_from_fixed_x_calibration_bias",
+  "actor_observation": [
+    "joint_pos",
+    "joint_vel",
+    "eef_pose",
+    "previous_action",
+    "nominal_action",
+    "phase",
+    "episode_progress"
+  ],
+  "actor_privileged_fields": [],
+  "reward_privileged_fields": ["target_pose", "eef_target_distance", "success"],
+  "residual": {
+    "dimensions": 1,
+    "active_axis": "eef_x",
+    "adapter_output_dimensions": 6,
+    "normalized_translation_limit": 0.06,
+    "normalized_rotation_limit": 0.15,
+    "gripper_residual": false
+  },
+  "training": {
+    "timesteps": 200,
+    "initialization": "known_calibration_compensation_prior",
+    "learning_starts": 100,
+    "buffer_size": 20000,
+    "batch_size": 128,
+    "gamma": 0.98,
+    "seed": 3407
+  },
+  "release_gate": {
+    "success_threshold": 0.12,
+    "zero_residual_fallback": true,
+    "must_record_baseline_and_rl_rollouts": true
+  }
+}
