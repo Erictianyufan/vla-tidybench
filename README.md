@@ -1,6 +1,6 @@
 # VLA-TidyBench
 
-VLA-TidyBench 是一个面向具身智能工程实践的仿真项目：在 Isaac Sim / Isaac Lab 中使用 Franka Panda 完成抽屉整理任务，并贯通自动示范采集、LeRobot 数据转换、OpenPI π0.5 LoRA、策略服务、闭环部署和多机位演示。
+VLA-TidyBench 是一个面向具身智能工程实践的仿真项目（主要用于本人个人学习）：在 Isaac Sim / Isaac Lab 中使用 Franka Panda 完成抽屉整理任务，并贯通自动示范采集、LeRobot 数据转换、OpenPI π0.5 LoRA、策略服务、闭环部署和多机位演示。
 
 目标任务：**Open the drawer → pick an object → place it in the drawer → close the drawer.**
 
