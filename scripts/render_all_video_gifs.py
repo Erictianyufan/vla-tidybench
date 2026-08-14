@@ -15,6 +15,7 @@ PROFILES: dict[str, tuple[int, int, int]] = {
     "pi05-dls-recovery-open-success": (8, 640, 96),
     "pi05-four-skill-minimal-success": (6, 600, 80),
     "pick-residual-sac-demo": (8, 640, 96),
+    "pi05-continuous-medicine-demo": (6, 600, 80),
     "vla-tidybench-final-project": (4, 540, 64),
     "vla-tidybench-new-scene-preview": (8, 640, 96),
 }

@@ -1,0 +1,113 @@
+#usda 1.0
+(
+    defaultPrim = "MedicineBottle"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "MedicineBottle" (
+    prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+)
+{
+    point3f physics:centerOfMass = (0, 0, -0.004)
+    float physics:mass = 0.05
+
+    def Cylinder "Body" (
+        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+    )
+    {
+        uniform token axis = "Z"
+        double height = 0.088
+        rel material:binding = </Looks/AmberPlastic>
+        double radius = 0.0235
+        double3 xformOp:translate = (0, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Cylinder "Cap" (
+        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+    )
+    {
+        uniform token axis = "Z"
+        double height = 0.02
+        rel material:binding = </Looks/WhitePlastic>
+        double radius = 0.025
+        double3 xformOp:translate = (0, 0, 0.054)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Cylinder "Label" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform token axis = "Z"
+        double height = 0.046
+        rel material:binding = </Looks/WhitePlastic>
+        double radius = 0.0239
+        double3 xformOp:translate = (0, 0, -0.002)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Cube "MedicalCrossVertical" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/MedicalRed>
+        double size = 1
+        float3 xformOp:scale = (0.01, 0.0015, 0.027)
+        double3 xformOp:translate = (0, -0.0242, -0.002)
+        uniform token[] xformOpOrder = ["xformOp:scale", "xformOp:translate"]
+    }
+
+    def Cube "MedicalCrossHorizontal" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/MedicalRed>
+        double size = 1
+        float3 xformOp:scale = (0.024, 0.0015, 0.011)
+        double3 xformOp:translate = (0, -0.0243, -0.002)
+        uniform token[] xformOpOrder = ["xformOp:scale", "xformOp:translate"]
+    }
+}
+def "Looks"
+{
+    def Material "AmberPlastic"
+    {
+        token outputs:surface.connect = </Looks/AmberPlastic/PreviewSurface.outputs:surface>
+
+        def Shader "PreviewSurface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0.55, 0.16, 0.035)
+            float inputs:roughness = 0.32
+            token outputs:surface
+        }
+    }
+
+    def Material "WhitePlastic"
+    {
+        token outputs:surface.connect = </Looks/WhitePlastic/PreviewSurface.outputs:surface>
+
+        def Shader "PreviewSurface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0.92, 0.94, 0.96)
+            float inputs:roughness = 0.5
+            token outputs:surface
+        }
+    }
+
+    def Material "MedicalRed"
+    {
+        token outputs:surface.connect = </Looks/MedicalRed/PreviewSurface.outputs:surface>
+
+        def Shader "PreviewSurface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0.78, 0.025, 0.035)
+            float inputs:roughness = 0.42
+            token outputs:surface
+        }
+    }
+}

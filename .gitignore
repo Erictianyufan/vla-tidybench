@@ -31,12 +31,13 @@ results/metrics/*.jsonl
 *.mkv
 *.avi
 
-# One small, explicitly labeled presentation preview is published with the docs.
+# Small, explicitly labeled presentation demos are published with the docs.
 !docs/media/vla-tidybench-new-scene-preview.mp4
 !docs/media/vla-tidybench-final-project.mp4
 !docs/media/pi05-dls-recovery-open-success.mp4
 !docs/media/pi05-four-skill-minimal-success.mp4
 !docs/media/pick-residual-sac-demo.mp4
+!docs/media/pi05-continuous-medicine-demo.mp4
 
 # Credentials and host-specific access material.
 *.pem

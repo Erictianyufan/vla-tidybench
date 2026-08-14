@@ -1,0 +1,19 @@
+{
+  "checkpoint": "pi05_tidybench_drawer_four_skill_lora/four_skill_min_200/199",
+  "episode_steps": 438,
+  "fps": 20,
+  "mean_infer_ms": 103.0929883873378,
+  "policy": "pi0.5-four-skill-lora+dls-live-recovery",
+  "policy_replan_steps": 4,
+  "policy_residual_weight": 0.0001,
+  "resets_between_skills": 0,
+  "skills": [
+    "open",
+    "pick",
+    "place",
+    "close"
+  ],
+  "success": true,
+  "target_asset": "assets/medicine_bottle.usda",
+  "video_duration_seconds": 21.9
+}

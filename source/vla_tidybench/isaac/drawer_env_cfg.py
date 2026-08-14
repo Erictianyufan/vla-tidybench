@@ -1,12 +1,14 @@
-"""Franka home-cabinet grocery scene used by VLA-TidyBench.
+"""Franka home-cabinet medicine-storage scene used by VLA-TidyBench.
 
 The class extends Isaac Lab's verified DLS IK-relative drawer task with two
-deployable RGB observations and a YCB grocery target.  Simulator truth remains
+deployable RGB observations and a graspable medicine bottle. Simulator truth remains
 available to scripted teachers and metrics, but is deliberately excluded from
 the policy observation group.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
@@ -60,7 +62,7 @@ class TidyBenchObservationsCfg:
 
 @configclass
 class TidyBenchDrawerEnvCfg(FrankaCabinetEnvCfg):
-    """One-env-ready drawer scene with a graspable YCB tomato-soup can."""
+    """One-env-ready drawer scene with a graspable medicine bottle."""
 
     observations: TidyBenchObservationsCfg = TidyBenchObservationsCfg()
 
@@ -97,20 +99,24 @@ class TidyBenchDrawerEnvCfg(FrankaCabinetEnvCfg):
             max_depenetration_velocity=2.0,
             disable_gravity=False,
         )
-        asset_root = "/home/ubuntu/readonly/Assets/Isaac/4.5/Isaac"
+        project_root = Path(__file__).resolve().parents[3]
         self.scene.target_object = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/TargetObject",
             # Keep the pick zone in front of the open drawer front.  Placing
             # the object farther back causes a lifted grasp to collide with
             # the top-drawer fascia when the drawer starts open.
-            init_state=RigidObjectCfg.InitialStateCfg(pos=(0.20, -0.20, 0.030), rot=(0.0, 0.0, 0.0, 1.0)),
+            init_state=RigidObjectCfg.InitialStateCfg(pos=(0.20, -0.20, 0.066), rot=(0.0, 0.0, 0.0, 1.0)),
             spawn=sim_utils.UsdFileCfg(
-                usd_path=f"{asset_root}/Props/YCB/Axis_Aligned_Physics/005_tomato_soup_can.usd",
-                scale=(0.55, 0.55, 0.55),
+                usd_path=str(project_root / "assets" / "medicine_bottle.usda"),
                 rigid_props=target_props,
                 collision_props=CollisionPropertiesCfg(),
-                mass_props=MassPropertiesCfg(mass=0.08),
-                semantic_tags=[("class", "tomato_soup_can")],
+                mass_props=MassPropertiesCfg(mass=0.050),
+                physics_material=sim_utils.RigidBodyMaterialCfg(
+                    static_friction=1.2,
+                    dynamic_friction=1.0,
+                    restitution=0.0,
+                ),
+                semantic_tags=[("class", "medicine_bottle")],
             ),
         )
 

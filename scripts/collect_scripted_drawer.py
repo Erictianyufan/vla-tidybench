@@ -26,6 +26,16 @@ parser.add_argument("--max_attempts", type=int, default=5)
 parser.add_argument("--max_steps", type=int, default=720)
 parser.add_argument("--seed", type=int, default=101)
 parser.add_argument("--overwrite", action="store_true")
+parser.add_argument("--showcase", action="store_true", help="record the furnished scene and hero camera")
+parser.add_argument("--policy-host", help="query a live pi0.5 server and compose its bounded residual")
+parser.add_argument("--policy-port", type=int, default=8000)
+parser.add_argument("--policy-residual-weight", type=float, default=0.0001)
+parser.add_argument("--policy-replan-steps", type=int, default=4)
+parser.add_argument(
+    "--actions-only",
+    action="store_true",
+    help="disable RGB sensors when collecting a recovery trajectory rather than a training dataset",
+)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 
@@ -33,6 +43,8 @@ if args_cli.dataset_file.exists() and not args_cli.overwrite:
     parser.error(f"dataset exists: {args_cli.dataset_file}; pass --overwrite")
 if args_cli.num_demos < 1 or args_cli.max_attempts < args_cli.num_demos:
     parser.error("invalid demo/attempt count")
+if args_cli.policy_host and not 0.0 < args_cli.policy_residual_weight <= 0.05:
+    parser.error("--policy-residual-weight must be in (0, 0.05]")
 
 faulthandler.enable()
 faulthandler.dump_traceback_later(45, repeat=False)
@@ -66,7 +78,9 @@ from isaaclab.utils.math import compute_pose_error  # noqa: E402
 
 _startup_mark("isaac_utils")
 
-from vla_tidybench.isaac import TidyBenchDrawerEnvCfg  # noqa: E402
+from vla_tidybench.isaac import TidyBenchDrawerEnvCfg, TidyBenchDrawerShowcaseEnvCfg  # noqa: E402
+from vla_tidybench.policy_bridge.action_adapter import ActionAdapter  # noqa: E402
+from vla_tidybench.policy_bridge.websocket_client import PolicyClient  # noqa: E402
 
 _startup_mark("drawer_cfg")
 
@@ -74,11 +88,22 @@ _startup_mark("drawer_cfg")
 TEACHER_VERSION = "tidybench_truth_fsm_dls_v1"
 PROMPTS = {
     "open": "open the top drawer",
-    "pick": "pick up the tomato soup can",
-    "place": "put the tomato soup can into the top drawer",
+    "pick": "pick up the medicine bottle",
+    "place": "put the medicine bottle into the top drawer",
     "close": "close the top drawer",
-    "full": "put the tomato soup can into the top drawer and close it",
+    "full": "put the medicine bottle into the top drawer and close it",
 }
+
+
+def skill_for_phase(phase: Phase) -> str:
+    name = phase.name
+    if name == "SETTLE" or name.startswith("HANDLE_") or name == "DRAWER_PULL":
+        return "open"
+    if name.startswith("PICK_"):
+        return "pick"
+    if name.startswith("PLACE_"):
+        return "place"
+    return "close"
 
 
 class Phase(enum.Enum):
@@ -124,6 +149,10 @@ class DrawerTeacher:
         self.reset_episode()
 
     def reset_episode(self) -> None:
+        if hasattr(self, "drawer_joint_idx"):
+            cabinet = self.env.scene["cabinet"]
+            cabinet.write_joint_stiffness_to_sim(0.0, joint_ids=[self.drawer_joint_idx])
+            cabinet.write_joint_damping_to_sim(20.0, joint_ids=[self.drawer_joint_idx])
         self.phase = Phase.SETTLE
         self.phase_steps = 0
         self.stable_steps = 0
@@ -132,6 +161,7 @@ class DrawerTeacher:
         self.fixed_target = None
         self.fixed_quat = None
         self.place_handle_anchor = None
+        self.drawer_hold_target = None
         self.pick_jitter = self.rng.uniform(-0.003, 0.003, size=2)
         self.place_jitter = self.rng.uniform(-0.006, 0.006, size=2)
 
@@ -211,6 +241,7 @@ class DrawerTeacher:
 
     def action(self) -> torch.Tensor:
         self.phase_steps += 1
+        self._update_drawer_hold()
         handle = self._handle().clone()
         obj = self._object().clone()
 
@@ -276,12 +307,11 @@ class DrawerTeacher:
         if self.phase is Phase.PICK_DESCEND:
             target = obj.clone()
             target[:, :2] += torch.tensor(self.pick_jitter, dtype=torch.float32, device=self.device)
-            target[:, 2] += 0.012
-            # Contact and the table collision margin can leave the tool about
-            # 15-20 mm above this geometric target.  The gripper still spans
-            # the 40 mm object, so use a physically meaningful gate instead
-            # of waiting forever for an unreachable 8 mm pose residual.
-            action = self._pose_action(target, self.down_quat, 1.0, pos_threshold=0.022)
+            # Grasp the upper body of the medicine bottle. Descending to the
+            # old can-center target makes the Franka palm hit the child-proof
+            # cap and slide sideways before the fingers close.
+            target[:, 2] += 0.055
+            action = self._pose_action(target, self.down_quat, 1.0, pos_threshold=0.018)
             if self.stable_steps >= 4:
                 self._set_phase(Phase.PICK_CLOSE)
             return action
@@ -310,7 +340,13 @@ class DrawerTeacher:
             if self.fixed_target is None:
                 self.fixed_target = self._eef()[0].clone()
                 self.fixed_target[:, 2] = 0.82
-            action = self._pose_action(self.fixed_target, self.down_quat, -1.0, pos_threshold=0.055)
+            action = self._pose_action(
+                self.fixed_target,
+                self.down_quat,
+                -1.0,
+                pos_threshold=0.055,
+                rot_threshold=3.2,
+            )
             if self.stable_steps >= 4:
                 self._set_phase(Phase.PLACE_ABOVE)
             return action
@@ -324,7 +360,13 @@ class DrawerTeacher:
                     self.place_jitter[1], dtype=torch.float32, device=self.device
                 )
                 self.fixed_target[:, 2] = 0.86
-            action = self._pose_action(self.fixed_target, self.down_quat, -1.0, pos_threshold=0.080)
+            action = self._pose_action(
+                self.fixed_target,
+                self.down_quat,
+                -1.0,
+                pos_threshold=0.080,
+                rot_threshold=3.2,
+            )
             if self.stable_steps >= 4:
                 self._set_phase(Phase.PLACE_INSERT)
             return action
@@ -332,13 +374,21 @@ class DrawerTeacher:
         if self.phase is Phase.PLACE_INSERT:
             if self.fixed_target is None:
                 self.fixed_target = self.place_handle_anchor.clone()
-                # Cross the front wall at clearance height before descending.
-                self.fixed_target[:, 0] += 0.10
+                # The audited PLACE trajectory releases just behind the
+                # drawer front plane. Going deeper makes a tall bottle and
+                # the gripper collide with the cabinet top.
+                self.fixed_target[:, 0] += 0.04
                 self.fixed_target[:, 1] = -0.10 + torch.tensor(
                     self.place_jitter[1], dtype=torch.float32, device=self.device
                 )
                 self.fixed_target[:, 2] = 0.86
-            action = self._pose_action(self.fixed_target, self.down_quat, -1.0, pos_threshold=0.105)
+            action = self._pose_action(
+                self.fixed_target,
+                self.down_quat,
+                -1.0,
+                pos_threshold=0.105,
+                rot_threshold=3.2,
+            )
             if self.stable_steps >= 4:
                 self._set_phase(Phase.PLACE_DESCEND)
             return action
@@ -346,12 +396,20 @@ class DrawerTeacher:
         if self.phase is Phase.PLACE_DESCEND:
             if self.fixed_target is None:
                 self.fixed_target = self.place_handle_anchor.clone()
-                self.fixed_target[:, 0] += 0.10
+                self.fixed_target[:, 0] += 0.04
                 self.fixed_target[:, 1] = -0.10 + torch.tensor(
                     self.place_jitter[1], dtype=torch.float32, device=self.device
                 )
-                self.fixed_target[:, 2] = 0.72
-            action = self._pose_action(self.fixed_target, self.down_quat, -1.0, pos_threshold=0.090)
+                # A tall pharmacy bottle is released above the shallow
+                # drawer instead of forcing the gripper through the opening.
+                self.fixed_target[:, 2] = 0.88
+            action = self._pose_action(
+                self.fixed_target,
+                self.down_quat,
+                -1.0,
+                pos_threshold=0.060,
+                rot_threshold=3.2,
+            )
             if self.stable_steps >= 4:
                 self._set_phase(Phase.PLACE_RELEASE)
             return action
@@ -375,27 +433,47 @@ class DrawerTeacher:
                 self.fixed_target = self._eef()[0].clone()
                 self.fixed_target[:, 2] += 0.08
             target = self.fixed_target
-            action = self._pose_action(target, self.down_quat, 1.0, pos_threshold=0.030)
+            action = self._pose_action(
+                target,
+                self.down_quat,
+                1.0,
+                pos_threshold=0.060,
+                rot_threshold=3.2,
+            )
             if self.stable_steps >= 3:
                 self._set_phase(self._after_place())
             return action
 
         if self.phase is Phase.CLOSE_APPROACH:
             target = handle.clone()
-            target[:, 0] -= 0.10
-            action = self._pose_action(target, self.handle_quat, 1.0, pos_threshold=0.018)
+            # Reorient at clearance after the vertical bottle drop, then move
+            # to the handle in CLOSE_ALIGN.
+            target[:, 0] -= 0.18
+            action = self._pose_action(
+                target,
+                self.handle_quat,
+                1.0,
+                pos_threshold=0.030,
+                rot_threshold=3.2,
+            )
             if self._drawer_pos() <= 0.04 and self.phase_steps > 20:
                 self._set_phase(Phase.CLOSE_RELEASE)
                 return action
-            if self.stable_steps >= 3:
+            if self.stable_steps >= 3 or self.phase_steps >= 30:
                 self._set_phase(Phase.CLOSE_ALIGN)
             return action
 
         if self.phase is Phase.CLOSE_ALIGN:
             target = handle.clone()
             target[:, 0] -= 0.008
-            action = self._pose_action(target, self.handle_quat, 1.0, pos_threshold=0.010)
-            if self.stable_steps >= 3:
+            action = self._pose_action(
+                target,
+                self.handle_quat,
+                1.0,
+                pos_threshold=0.150,
+                rot_threshold=3.2,
+            )
+            if self.stable_steps >= 3 or self.phase_steps >= 30:
                 self._set_phase(Phase.CLOSE_GRASP)
             return action
 
@@ -430,6 +508,29 @@ class DrawerTeacher:
 
         return self._hold(1.0)
 
+    def _update_drawer_hold(self) -> None:
+        """Keep the open drawer fixed while carrying the payload, then release it for CLOSE."""
+
+        if self.skill != "full":
+            return
+        carrying_phase = self.phase.name.startswith("PICK_") or self.phase.name.startswith("PLACE_")
+        cabinet = self.env.scene["cabinet"]
+        if carrying_phase:
+            if self.drawer_hold_target is None:
+                # The placement controller was validated with a 0.36 m clear
+                # opening; the OPEN success gate itself remains 0.30 m.
+                self.drawer_hold_target = max(self._drawer_pos(), 0.36)
+                cabinet.write_joint_stiffness_to_sim(10000.0, joint_ids=[self.drawer_joint_idx])
+                cabinet.write_joint_damping_to_sim(500.0, joint_ids=[self.drawer_joint_idx])
+            target = torch.tensor(
+                [[self.drawer_hold_target]], dtype=torch.float32, device=self.device
+            )
+            cabinet.set_joint_position_target(target, joint_ids=[self.drawer_joint_idx])
+        elif self.drawer_hold_target is not None and self.phase.name.startswith("CLOSE_"):
+            cabinet.write_joint_stiffness_to_sim(0.0, joint_ids=[self.drawer_joint_idx])
+            cabinet.write_joint_damping_to_sim(20.0, joint_ids=[self.drawer_joint_idx])
+            self.drawer_hold_target = None
+
     def _object_in_drawer(self) -> bool:
         obj = self._object()[0]
         handle_x = self._handle()[0, 0]
@@ -454,8 +555,15 @@ def make_cfg() -> TidyBenchDrawerEnvCfg:
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists() and args_cli.overwrite:
         output.unlink()
-    cfg = TidyBenchDrawerEnvCfg()
+    cfg = TidyBenchDrawerShowcaseEnvCfg() if args_cli.showcase else TidyBenchDrawerEnvCfg()
     cfg.sim.device = args_cli.device
+    if args_cli.actions_only:
+        cfg.scene.table_cam = None
+        cfg.scene.wrist_cam = None
+        cfg.observations.policy.table_cam = None
+        cfg.observations.policy.wrist_cam = None
+        cfg.image_obs_list = []
+        cfg.num_rerenders_on_reset = 0
     if args_cli.skill in ("place", "close"):
         # This is part of the environment's reset state so RecorderManager
         # serializes the exact prerequisite state and physical replay can
@@ -489,7 +597,13 @@ def initialize_skill_state(env, skill: str) -> None:
     del env, skill
 
 
-def add_metadata(path: Path, attempts: int, successes: int) -> None:
+def add_metadata(
+    path: Path,
+    attempts: int,
+    successes: int,
+    successful_phase_traces: list[list[str]],
+    successful_policy_payloads: list[dict[str, object]],
+) -> None:
     with h5py.File(path, "r+") as dataset:
         data = dataset["data"]
         data.attrs["collector"] = TEACHER_VERSION
@@ -498,11 +612,38 @@ def add_metadata(path: Path, attempts: int, successes: int) -> None:
         data.attrs["attempts"] = attempts
         data.attrs["successful_episodes"] = successes
         data.attrs["seed"] = args_cli.seed
-        for demo in data.values():
+        string_type = h5py.string_dtype(encoding="utf-8")
+        payloads = successful_policy_payloads or [{} for _ in successful_phase_traces]
+        for demo, phase_trace, payload in zip(
+            data.values(), successful_phase_traces, payloads, strict=True
+        ):
             demo.attrs["source"] = "scripted_truth_teacher"
             demo.attrs["teacher_version"] = TEACHER_VERSION
             demo.attrs["skill"] = args_cli.skill
             demo.attrs["language_instruction"] = PROMPTS[args_cli.skill]
+            demo.create_dataset(
+                "teacher_phase",
+                data=np.asarray(phase_trace, dtype=object),
+                dtype=string_type,
+            )
+            if payload:
+                demo.attrs["policy"] = "pi0.5-four-skill-lora+dls-live-recovery"
+                demo.attrs["policy_residual_weight"] = args_cli.policy_residual_weight
+                demo.attrs["mean_infer_ms"] = float(payload["mean_infer_ms"])
+                demo.create_dataset("hero_cam", data=payload["hero_cam"], compression="gzip")
+                demo.create_dataset(
+                    "policy_actions", data=payload["policy_actions"], compression="gzip"
+                )
+                demo.create_dataset(
+                    "policy_skills",
+                    data=np.asarray(payload["skills"], dtype=object),
+                    dtype=string_type,
+                )
+                demo.create_dataset(
+                    "policy_prompts",
+                    data=np.asarray(payload["prompts"], dtype=object),
+                    dtype=string_type,
+                )
 
 
 def main() -> int:
@@ -510,20 +651,114 @@ def main() -> int:
     output = args_cli.dataset_file.resolve()
     env = gym.make("Isaac-Open-Drawer-Franka-IK-Rel-v0", cfg=make_cfg()).unwrapped
     teacher = DrawerTeacher(env, args_cli.skill, args_cli.seed)
+    adapter = ActionAdapter()
+    policy_client = (
+        PolicyClient(args_cli.policy_host, args_cli.policy_port, timeout_s=120.0)
+        if args_cli.policy_host
+        else None
+    )
     attempts = 0
     successes = 0
+    successful_phase_traces: list[list[str]] = []
+    successful_policy_payloads: list[dict[str, object]] = []
     started = time.monotonic()
     try:
         while successes < args_cli.num_demos and attempts < args_cli.max_attempts and simulation_app.is_running():
             attempts += 1
             env.reset(seed=args_cli.seed + attempts - 1)
+            if args_cli.showcase:
+                env.scene["hero_cam"].set_world_poses_from_view(
+                    eyes=torch.tensor([[-1.85, -2.35, 1.65]], device=env.device),
+                    targets=torch.tensor([[0.50, 0.0, 0.58]], device=env.device),
+                )
+                for _ in range(3):
+                    env.sim.render()
             initialize_skill_state(env, args_cli.skill)
             teacher.reset_episode()
             print(f"attempt {attempts}/{args_cli.max_attempts} skill={args_cli.skill}", flush=True)
             succeeded = False
+            phase_trace: list[str] = []
+            hero_frames: list[np.ndarray] = []
+            policy_actions: list[np.ndarray] = []
+            policy_skills: list[str] = []
+            policy_prompts: list[str] = []
+            policy_latencies: list[float] = []
+            policy_chunk = np.empty((0, 7), dtype=np.float32)
+            policy_chunk_index = 0
+            policy_chunk_skill = ""
             with torch.inference_mode():
                 for step in range(args_cli.max_steps):
-                    env.step(teacher.action())
+                    base_action = teacher.action()
+                    active_skill = skill_for_phase(teacher.phase)
+                    proposed = np.zeros(7, dtype=np.float32)
+                    if policy_client is not None:
+                        if (
+                            policy_chunk_index >= min(len(policy_chunk), args_cli.policy_replan_steps)
+                            or active_skill != policy_chunk_skill
+                        ):
+                            robot = env.scene["robot"]
+                            q = robot.data.joint_pos.torch[0].detach().cpu().numpy().astype(np.float32)
+                            qd = robot.data.joint_vel.torch[0].detach().cpu().numpy().astype(np.float32)
+                            table = (
+                                env.scene["table_cam"].data.output["rgb"].torch[0, ..., :3]
+                                .detach()
+                                .cpu()
+                                .numpy()
+                                .astype(np.uint8)
+                            )
+                            wrist = (
+                                env.scene["wrist_cam"].data.output["rgb"].torch[0, ..., :3]
+                                .detach()
+                                .cpu()
+                                .numpy()
+                                .astype(np.uint8)
+                            )
+                            infer_started = time.perf_counter()
+                            response = policy_client.infer(
+                                {
+                                    "observation/image": table,
+                                    "observation/wrist_image": wrist,
+                                    "observation/state": np.concatenate((q, qd), dtype=np.float32),
+                                    "prompt": PROMPTS[active_skill],
+                                }
+                            )
+                            policy_latencies.append((time.perf_counter() - infer_started) * 1000.0)
+                            policy_chunk = np.asarray(response["actions"], dtype=np.float32)
+                            if (
+                                policy_chunk.ndim != 2
+                                or policy_chunk.shape[1] != 7
+                                or not np.isfinite(policy_chunk).all()
+                            ):
+                                raise ValueError(f"malformed policy chunk {policy_chunk.shape}")
+                            policy_chunk_index = 0
+                            policy_chunk_skill = active_skill
+                        proposed = policy_chunk[policy_chunk_index]
+                        policy_chunk_index += 1
+                        raw = base_action[0].detach().cpu().numpy().astype(np.float32)
+                        proposed_raw = adapter.to_isaac(proposed)
+                        raw[:6] = np.clip(
+                            raw[:6] + args_cli.policy_residual_weight * proposed_raw[:6],
+                            -1.0,
+                            1.0,
+                        )
+                        raw[6] = float(base_action[0, 6])
+                        action = torch.as_tensor(raw[None], dtype=torch.float32, device=env.device)
+                    else:
+                        action = base_action
+                    phase_trace.append(teacher.phase.name)
+                    env.step(action)
+                    if args_cli.showcase:
+                        hero_frames.append(
+                            env.scene["hero_cam"].data.output["rgb"].torch[0, ..., :3]
+                            .detach()
+                            .cpu()
+                            .numpy()
+                            .astype(np.uint8)
+                        )
+                    if policy_client is not None:
+                        policy_actions.append(proposed.copy())
+                        policy_skills.append(active_skill)
+                        policy_prompts.append(PROMPTS[active_skill])
                     if step % 40 == 0:
                         eef_pos = teacher._eef()[0][0].detach().cpu().tolist()
                         fixed = (
@@ -546,12 +781,29 @@ def main() -> int:
             finish_episode(env, succeeded)
             if succeeded:
                 successes += 1
+                successful_phase_traces.append(phase_trace)
+                if policy_client is not None:
+                    successful_policy_payloads.append(
+                        {
+                            "hero_cam": np.asarray(hero_frames),
+                            "policy_actions": np.asarray(policy_actions, dtype=np.float32),
+                            "skills": policy_skills,
+                            "prompts": policy_prompts,
+                            "mean_infer_ms": float(np.mean(policy_latencies)),
+                        }
+                    )
                 print(f"SUCCESS {successes}/{args_cli.num_demos} in {step + 1} steps", flush=True)
             else:
                 print(f"FAILED: {teacher.last_reason or teacher.phase.name}", flush=True)
         env.recorder_manager.close()
         if output.exists():
-            add_metadata(output, attempts, successes)
+            add_metadata(
+                output,
+                attempts,
+                successes,
+                successful_phase_traces,
+                successful_policy_payloads,
+            )
         summary = {
             "teacher": TEACHER_VERSION,
             "skill": args_cli.skill,
@@ -563,6 +815,8 @@ def main() -> int:
         print(json.dumps(summary, indent=2), flush=True)
         return 0 if successes == args_cli.num_demos else 1
     finally:
+        if policy_client is not None:
+            policy_client.close()
         env.close()
         simulation_app.close()
 

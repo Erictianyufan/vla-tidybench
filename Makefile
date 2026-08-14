@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-train drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
+.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-train drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
@@ -89,6 +89,14 @@ drawer-demo:
 	./scripts/run_openpi.sh scripts/render_skill_suite.py \
 		--data-root /home/ubuntu/data/vla-tidybench/raw \
 		--output artifacts/demo/vla-tidybench-skill-suite.mp4
+
+continuous-medicine-demo:
+	./scripts/run_isaac.sh scripts/collect_scripted_drawer.py \
+		--skill full --num_demos 1 --max_attempts 1 --max_steps 650 --seed 610 --overwrite \
+		--dataset_file /home/ubuntu/data/vla-tidybench/eval/drawer_full_medicine_pi05_live.hdf5 \
+		--showcase --policy-host $${POLICY_HOST:-127.0.0.1} --policy-port $${POLICY_PORT:-8000} \
+		--policy-residual-weight $${POLICY_RESIDUAL_WEIGHT:-0.0001} --policy-replan-steps 4 \
+		--device cuda:0 --enable_cameras --viz none
 
 pick-rl-train:
 	./scripts/run_isaac.sh scripts/train_pick_residual_sac.py \

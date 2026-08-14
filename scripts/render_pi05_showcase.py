@@ -20,13 +20,37 @@ def main() -> None:
     parser.add_argument("--fps", type=int, default=20)
     args = parser.parse_args()
     with h5py.File(args.recording, "r") as source:
-        hero = np.asarray(source["hero_cam"])
-        table = np.asarray(source["table_cam"])
-        wrist = np.asarray(source["wrist_cam"])
-        success = bool(source.attrs["success"])
-        policy = str(source.attrs["policy"])
-        prompt = str(source.attrs["prompt"])
-        mean_infer = float(source.attrs["mean_infer_ms"])
+        if "hero_cam" in source:
+            recording = source
+            hero = np.asarray(recording["hero_cam"])
+            table = np.asarray(recording["table_cam"])
+            wrist = np.asarray(recording["wrist_cam"])
+            success = bool(recording.attrs["success"])
+            policy = str(recording.attrs["policy"])
+            prompt = str(recording.attrs["prompt"])
+            mean_infer = float(recording.attrs["mean_infer_ms"])
+            prompt_key, skill_key = "prompts", "skills"
+        else:
+            data = source["data"]
+            recording = data[sorted(data.keys())[0]]
+            hero = np.asarray(recording["hero_cam"])
+            table = np.asarray(recording["obs/table_cam"])
+            wrist = np.asarray(recording["obs/wrist_cam"])
+            success = int(data.attrs.get("successful_episodes", 0)) > 0
+            policy = str(recording.attrs.get("policy", "scripted_truth_teacher"))
+            prompt = str(recording.attrs.get("language_instruction", data.attrs.get("language_instruction", "")))
+            mean_infer = float(recording.attrs.get("mean_infer_ms", -1.0))
+            prompt_key, skill_key = "policy_prompts", "policy_skills"
+        prompts = (
+            [value.decode("utf-8") if isinstance(value, bytes) else str(value) for value in recording[prompt_key]]
+            if prompt_key in recording
+            else None
+        )
+        skills = (
+            [value.decode("utf-8") if isinstance(value, bytes) else str(value) for value in recording[skill_key]]
+            if skill_key in recording
+            else None
+        )
     font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
     small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
     frames: list[np.ndarray] = []
@@ -40,16 +64,24 @@ def main() -> None:
         canvas.paste(wrist_image, (1045, 455))
         draw = ImageDraw.Draw(canvas)
         draw.rectangle((0, 0, 1280, 72), fill=(12, 18, 28))
+        frame_prompt = prompts[index] if prompts else prompt
+        frame_skill = skills[index].upper() if skills else ""
         is_preview = policy == "scripted-teacher-camera-preview"
         is_recovery = "dls-contact-recovery" in policy
-        if is_preview:
+        is_continuous = "continuous-recovery" in policy or "live-recovery" in policy
+        if is_continuous:
+            heading = "VLA-TidyBench | Continuous pi0.5-assisted inference"
+        elif is_preview:
             heading = "VLA-TidyBench | New scene + three-camera preview"
         elif is_recovery:
             heading = "VLA-TidyBench | pi0.5 + DLS contact recovery"
         else:
             heading = "VLA-TidyBench | Real pi0.5 LoRA closed loop"
         draw.text((22, 10), heading, font=font, fill=(96, 216, 255))
-        draw.text((22, 42), f'Prompt: "{prompt}"', font=small, fill="white")
+        draw.text((22, 42), f'Prompt: "{frame_prompt}"', font=small, fill="white")
+        if is_continuous:
+            draw.rounded_rectangle((850, 8, 980, 58), radius=10, fill=(25, 105, 145))
+            draw.text((878, 20), frame_skill, font=font, fill="white")
         draw.text(
             (1000, 16),
             "SUCCESS" if success else "ATTEMPT",
@@ -60,7 +92,10 @@ def main() -> None:
         draw.rectangle((1041, 451, 1269, 679), outline=(96, 216, 255), width=3)
         draw.text((820, 680), "table camera", font=small, fill="white")
         draw.text((1050, 680), "wrist camera", font=small, fill="white")
-        footer = policy if is_preview else f"warm inference ~{mean_infer:.0f} ms | {policy}"
+        if is_continuous:
+            footer = f"warm inference ~{mean_infer:.0f} ms | pi0.5 + DLS recovery"
+        else:
+            footer = policy if is_preview else f"warm inference ~{mean_infer:.0f} ms | {policy}"
         draw.text((760, 78), footer, font=small, fill="white")
         frames.append(np.asarray(canvas))
     args.output.parent.mkdir(parents=True, exist_ok=True)
