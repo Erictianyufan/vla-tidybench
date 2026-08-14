@@ -50,9 +50,25 @@ flowchart LR
 | 模型输出 | `(16, 7)` action chunk |
 | 推理延迟 | 首次 JIT 约 17 s；预热后约 96 ms |
 | 场景资产 | Isaac `Simple_Room`、YCB 香蕉、碗和杯子 |
-| 闭环诊断 | 训练与部署链路运行成功；当前小数据 checkpoint 尚未稳定建立把手接触 |
+| 纯 π0.5 闭环 | `K=1/4/16` 均未稳定建立把手接触 |
+| π0.5 + DLS contact recovery | 94 步打开至 `0.303 m`，成功阈值 `0.30 m`，平均推理约 101 ms |
 
 顶部四技能 GIF 使用同一 Isaac 场景中的状态机教师与 DLS IK 生成，用于展示场景、控制器和相机链路；最终视频同时保留真实 π0.5 闭环片段，便于直接比较模型策略与参考技能轨迹。
+
+### 最小成功调整
+
+当前小数据 checkpoint 无法独立完成把手接触，因此部署端保留 π0.5 的逐步视觉推理，并将其作为权重 2% 的受限动作残差；回放验证过的 DLS 状态机提供稳定的接触基础动作。该模式在记录文件中分别保存 `policy_actions`、`recovery_base_actions` 和最终 `actions`，不会将混合控制结果标记为纯 π0.5 成功。
+
+```bash
+./scripts/run_isaac.sh scripts/run_drawer_pi05_closed_loop.py \
+  --device cuda:0 --enable_cameras --viz none \
+  --host 127.0.0.1 --port 8000 --seed 300 \
+  --max-steps 180 --execute-steps 1 --showcase \
+  --dls-contact-recovery --policy-residual-weight 0.02 \
+  --output /home/ubuntu/data/vla-tidybench/eval/pi05_dls_recovery_success_showcase.hdf5
+```
+
+[观看 π0.5 + DLS OPEN 成功视频](docs/media/pi05-dls-recovery-open-success.mp4)
 
 ## 快速开始
 
@@ -176,5 +192,6 @@ make prepublish
 
 完整视频包含新场景、多机位、π0.5 闭环实测结果和四技能参考演示：
 
+- [观看 π0.5 + DLS OPEN 成功视频（MP4）](docs/media/pi05-dls-recovery-open-success.mp4)
 - [观看最终项目视频（MP4）](docs/media/vla-tidybench-final-project.mp4)
 - [观看三机位场景预览（MP4）](docs/media/vla-tidybench-new-scene-preview.mp4)

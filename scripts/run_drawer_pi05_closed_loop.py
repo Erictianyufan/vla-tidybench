@@ -24,8 +24,25 @@ parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--showcase", action="store_true", help="add room, props, and 720p hero camera")
 parser.add_argument("--teacher-preview", action="store_true", help="use the scripted OPEN teacher for camera QA")
 parser.add_argument("--teacher-skill", choices=("open", "pick", "place", "close"), default="open")
+parser.add_argument(
+    "--dls-contact-recovery",
+    action="store_true",
+    help="run pi0.5 every step as a bounded residual over the replay-validated DLS OPEN prior",
+)
+parser.add_argument("--policy-residual-weight", type=float, default=0.02)
+parser.add_argument(
+    "--recovery-demo",
+    type=Path,
+    default=Path("/home/ubuntu/data/vla-tidybench/raw/drawer_open_smoke.hdf5"),
+)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
+if args_cli.dls_contact_recovery and args_cli.teacher_preview:
+    parser.error("--dls-contact-recovery and --teacher-preview are mutually exclusive")
+if args_cli.dls_contact_recovery and args_cli.execute_steps != 1:
+    parser.error("DLS contact recovery requires --execute-steps 1")
+if not 0.0 <= args_cli.policy_residual_weight <= 0.1:
+    parser.error("--policy-residual-weight must be in [0, 0.1]")
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
@@ -75,6 +92,8 @@ def main() -> int:
     frames_wrist: list[np.ndarray] = []
     frames_hero: list[np.ndarray] = []
     actions_executed: list[np.ndarray] = []
+    policy_actions_proposed: list[np.ndarray] = []
+    recovery_actions_base: list[np.ndarray] = []
     latencies: list[float] = []
     success = False
     try:
@@ -99,6 +118,11 @@ def main() -> int:
             with h5py.File(demo_path, "r") as demo_file:
                 demo = demo_file["data"][sorted(demo_file["data"].keys())[0]]
                 teacher_actions = np.asarray(demo["actions"], dtype=np.float32)
+        recovery_actions = None
+        if args_cli.dls_contact_recovery:
+            with h5py.File(args_cli.recovery_demo, "r") as recovery_file:
+                demo = recovery_file["data"][sorted(recovery_file["data"].keys())[0]]
+                recovery_actions = np.asarray(demo["actions"], dtype=np.float32)
         try:
             step = 0
             while step < args_cli.max_steps and simulation_app.is_running():
@@ -123,7 +147,21 @@ def main() -> int:
                 if chunk.ndim != 2 or chunk.shape[1] != 7 or not np.isfinite(chunk).all():
                     raise ValueError(f"malformed action chunk {chunk.shape}")
                 for physical in chunk[: args_cli.execute_steps]:
-                    raw = physical if teacher_actions is not None else guard.to_isaac(physical)
+                    proposed = physical.copy()
+                    executed = physical.copy()
+                    if recovery_actions is not None:
+                        if step >= len(recovery_actions):
+                            break
+                        base_physical = adapter.from_isaac(recovery_actions[step])
+                        executed = base_physical.copy()
+                        executed[:6] += args_cli.policy_residual_weight * proposed[:6]
+                        executed[6] = base_physical[6]
+                        executed = guard.apply(executed)
+                        raw = adapter.to_isaac(executed)
+                        policy_actions_proposed.append(proposed)
+                        recovery_actions_base.append(base_physical)
+                    else:
+                        raw = physical if teacher_actions is not None else guard.to_isaac(physical)
                     env.step(torch.as_tensor(raw[None], dtype=torch.float32, device=env.device))
                     table, wrist, _ = _obs(env)
                     frames_table.append(table)
@@ -131,7 +169,7 @@ def main() -> int:
                     if args_cli.showcase:
                         hero = _numpy(env.scene["hero_cam"].data.output["rgb"])[0, ..., :3].astype(np.uint8)
                         frames_hero.append(hero)
-                    actions_executed.append(physical.copy())
+                    actions_executed.append(executed)
                     step += 1
                     drawer = float(env.scene["cabinet"].data.joint_pos.torch[0, drawer_idx])
                     obj = env.scene["target_object"].data.root_pos_w.torch[0]
@@ -157,20 +195,36 @@ def main() -> int:
                 client_context.close()
         with h5py.File(args_cli.output, "w") as output:
             output.attrs["format_version"] = 1
-            output.attrs["policy"] = "scripted-teacher-camera-preview" if teacher_actions is not None else "pi0.5-drawer-lora"
+            if teacher_actions is not None:
+                policy_name = "scripted-teacher-camera-preview"
+            elif recovery_actions is not None:
+                policy_name = "pi0.5-drawer-lora+dls-contact-recovery"
+            else:
+                policy_name = "pi0.5-drawer-lora"
+            output.attrs["policy"] = policy_name
             output.attrs["prompt"] = args_cli.prompt
             output.attrs["skill"] = args_cli.teacher_skill if teacher_actions is not None else "open"
             output.attrs["success"] = success
             output.attrs["mean_infer_ms"] = float(np.mean(latencies)) if latencies else -1.0
+            output.attrs["policy_residual_weight"] = (
+                args_cli.policy_residual_weight if recovery_actions is not None else 0.0
+            )
             output.create_dataset("table_cam", data=np.asarray(frames_table), compression="gzip")
             output.create_dataset("wrist_cam", data=np.asarray(frames_wrist), compression="gzip")
             if frames_hero:
                 output.create_dataset("hero_cam", data=np.asarray(frames_hero), compression="gzip")
             output.create_dataset("actions", data=np.asarray(actions_executed, dtype=np.float32))
+            if policy_actions_proposed:
+                output.create_dataset(
+                    "policy_actions", data=np.asarray(policy_actions_proposed, dtype=np.float32)
+                )
+                output.create_dataset(
+                    "recovery_base_actions", data=np.asarray(recovery_actions_base, dtype=np.float32)
+                )
         print(
             json.dumps(
                 {
-                    "policy": "scripted-teacher-camera-preview" if teacher_actions is not None else "pi0.5-drawer-lora",
+                    "policy": policy_name,
                     "success": success,
                     "steps": len(actions_executed),
                     "mean_infer_ms": round(float(np.mean(latencies)), 1) if latencies else None,

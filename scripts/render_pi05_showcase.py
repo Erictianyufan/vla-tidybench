@@ -41,7 +41,13 @@ def main() -> None:
         draw = ImageDraw.Draw(canvas)
         draw.rectangle((0, 0, 1280, 72), fill=(12, 18, 28))
         is_preview = policy == "scripted-teacher-camera-preview"
-        heading = "VLA-TidyBench | New scene + three-camera preview" if is_preview else "VLA-TidyBench | Real pi0.5 LoRA closed loop"
+        is_recovery = "dls-contact-recovery" in policy
+        if is_preview:
+            heading = "VLA-TidyBench | New scene + three-camera preview"
+        elif is_recovery:
+            heading = "VLA-TidyBench | pi0.5 + DLS contact recovery"
+        else:
+            heading = "VLA-TidyBench | Real pi0.5 LoRA closed loop"
         draw.text((22, 10), heading, font=font, fill=(96, 216, 255))
         draw.text((22, 42), f'Prompt: "{prompt}"', font=small, fill="white")
         draw.text((1000, 16), "SUCCESS" if success else "ATTEMPT", font=font, fill=(80, 230, 130) if success else (255, 190, 80))
