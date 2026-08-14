@@ -46,10 +46,8 @@ import torch  # noqa: E402
 from isaaclab.utils.math import compute_pose_error  # noqa: E402
 from stable_baselines3 import SAC  # noqa: E402
 from stable_baselines3.common.callbacks import BaseCallback  # noqa: E402
-
 from vla_tidybench.isaac import TidyBenchDrawerEnvCfg, TidyBenchDrawerShowcaseEnvCfg  # noqa: E402
 from vla_tidybench.rl import pick_residual_reward  # noqa: E402
-
 
 PHASES = ("settle", "above", "descend", "close", "lift")
 TRANSLATION_LIMIT = 0.06
@@ -155,7 +153,9 @@ class EpisodeStats(BaseCallback):
         self.successes: list[bool] = []
 
     def _on_step(self) -> bool:
-        for info, done in zip(self.locals.get("infos", []), self.locals.get("dones", [])):
+        for info, done in zip(
+            self.locals.get("infos", []), self.locals.get("dones", []), strict=True
+        ):
             if done:
                 self.successes.append(bool(info.get("is_success", False)))
         return simulation_app.is_running()
@@ -413,7 +413,11 @@ def main() -> int:
         return 0
 
     model = None if args_cli.baseline else SAC.load(args_cli.checkpoint, device="cpu")
-    records = evaluate(model, args_cli.eval_episodes if args_cli.mode == "evaluate" else 1, record=args_cli.mode == "record")
+    records = evaluate(
+        model,
+        args_cli.eval_episodes if args_cli.mode == "evaluate" else 1,
+        record=args_cli.mode == "record",
+    )
     return 0 if any(record["success"] for record in records) else 1
 
 

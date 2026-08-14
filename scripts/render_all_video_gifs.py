@@ -8,7 +8,6 @@ import os
 import subprocess
 from pathlib import Path
 
-
 # Long videos use fewer frames and colors so every README preview stays below
 # the repository's 10 MiB publication limit.
 PROFILES: dict[str, tuple[int, int, int]] = {
