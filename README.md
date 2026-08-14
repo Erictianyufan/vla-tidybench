@@ -187,10 +187,10 @@ make prepublish
 ## 最终演示
 
 <p align="center">
-  <img src="docs/media/final-project-preview.gif" alt="VLA-TidyBench 最终项目视频摘要" width="800">
+  <img src="docs/media/final-project-preview.gif" alt="π0.5 加 DLS contact recovery 成功打开抽屉" width="800">
 </p>
 
-完整视频包含新场景、多机位、π0.5 闭环实测结果和四技能参考演示：
+上方 GIF 展示 π0.5 持续视觉推理与 DLS contact recovery 的成功 OPEN 轨迹：94 步将抽屉打开至 `0.303 m`。相关视频：
 
 - [观看 π0.5 + DLS OPEN 成功视频（MP4）](docs/media/pi05-dls-recovery-open-success.mp4)
 - [观看最终项目视频（MP4）](docs/media/vla-tidybench-final-project.mp4)

@@ -7,7 +7,6 @@ import argparse
 import math
 from pathlib import Path
 
-import h5py
 import imageio.v3 as iio
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -40,6 +39,8 @@ def panel(hero: np.ndarray, table: np.ndarray, wrist: np.ndarray, skill: str) ->
 
 
 def skill_grid(paths: list[Path], output: Path, frames: int = 48) -> None:
+    import h5py
+
     sources = [h5py.File(path, "r") for path in paths]
     try:
         output_frames = []
@@ -58,7 +59,7 @@ def skill_grid(paths: list[Path], output: Path, frames: int = 48) -> None:
             source.close()
 
 
-def final_video_gif(video: Path, output: Path, frames: int = 72) -> None:
+def final_video_gif(video: Path, output: Path, frames: int = 48) -> None:
     meta = iio.immeta(video, plugin="FFMPEG")
     raw_total = float(meta.get("nframes", 0))
     total = int(raw_total) if math.isfinite(raw_total) else 0
@@ -69,9 +70,18 @@ def final_video_gif(video: Path, output: Path, frames: int = 72) -> None:
     for index in indices:
         frame = iio.imread(video, index=int(index), plugin="FFMPEG")
         image = Image.fromarray(frame).convert("RGB").resize((800, 450), Image.Resampling.LANCZOS)
-        images.append(image.quantize(colors=128, method=Image.Quantize.MEDIANCUT))
+        images.append(image.quantize(colors=96, method=Image.Quantize.MEDIANCUT))
     output.parent.mkdir(parents=True, exist_ok=True)
-    images[0].save(output, save_all=True, append_images=images[1:], duration=167, loop=0, optimize=True, disposal=2)
+    duration_ms = max(40, round(float(meta["duration"]) * 1000 / frames))
+    images[0].save(
+        output,
+        save_all=True,
+        append_images=images[1:],
+        duration=duration_ms,
+        loop=0,
+        optimize=True,
+        disposal=2,
+    )
 
 
 def main() -> None:
