@@ -22,6 +22,8 @@ VLA-TidyBench 是一个面向具身智能工程实践的仿真项目：在 Isaac
 - Isaac 闭环客户端、动作适配、安全约束和三机位同步录制。
 - Mimic 数据扩增、OOD 评测和冻结 VLA 残差强化学习的扩展接口。
 
+学习项目时建议先阅读[前七天：数据流与模块输入输出学习指南](docs/week1_dataflow_learning_guide.md)。该文档按照 Isaac 观测、统一动作、教师采集、HDF5、LeRobot 和 OpenPI Data Transform 的真实数据流组织，并给出模块契约、张量形状、架构图和验收清单。
+
 ## 系统架构
 
 ```mermaid
