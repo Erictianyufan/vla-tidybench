@@ -1,6 +1,6 @@
-# 数据流与模块输入输出
+# 数据流与模块输入输出参考
 
-这份文档整理 VLA-TidyBench 前七天的学习内容。第一阶段不追求立即训练出高成功率策略，而是建立一套能够对应代码、数据和仿真运行结果的完整项目思路。
+本文档以数据在 VLA-TidyBench 中的实际流动顺序为主线，说明各模块的输入、输出、字段、形状、坐标系和能力边界。目标是建立一套能够直接对应代码、数据文件和仿真结果的项目模型。
 
 阅读每个模块时，都应回答五个问题：
 
@@ -10,9 +10,9 @@
 4. 动作使用什么单位、坐标系和缩放规则？
 5. 这些信息在真实部署时是否可获得？
 
-## 1. 学习目标
+## 1. 阅读目标
 
-完成本阶段后，应能够：
+阅读本文后，应能够：
 
 - 从 Isaac Lab 中的一帧桌面相机图像和一组 Franka 关节状态，一直追踪到 π0.5 的模型输入。
 - 从 π0.5 输出的动作块，一直追踪到 Isaac Lab 中最终执行的机械臂动作。
@@ -101,7 +101,7 @@ flowchart LR
 | SafetyGuard | 规范物理 7D 动作 | 有界的规范物理动作 | 拒绝 NaN/Inf，并限制平移、旋转和残差幅度。 |
 | `ActionAdapter.to_isaac` | 规范物理 7D 动作 | Isaac 原始 7D 动作 | 前 6 维除以 `0.5`，避免隐藏的二次缩放。 |
 
-## 5. 第一天：系统边界与总体架构
+## 5. 系统边界与总体架构
 
 ### 5.1 Isaac Sim、Isaac Lab 与 OpenPI
 
@@ -133,7 +133,7 @@ flowchart LR
 
 这样做是为了隔离 Isaac/PyTorch 与 OpenPI/JAX 的 Python、NumPy、CUDA 依赖，避免把两个环境强行安装在一起。
 
-### 5.2 第一天验收
+### 5.2 检查要点
 
 - 能说明 Isaac Sim、Isaac Lab、OpenPI、Policy Client 和 Policy Server 的职责。
 - 能画出“Isaac 生成观测，OpenPI 返回动作”的闭环。
@@ -141,7 +141,7 @@ flowchart LR
 
 对应文件：[`environment.md`](environment.md)、[`deployment.md`](deployment.md)、[`../Makefile`](../Makefile)。
 
-## 6. 第二天：场景、物理与相机观测
+## 6. 场景、物理与相机观测
 
 ### 6.1 场景基础
 
@@ -182,7 +182,7 @@ decimation = 5
 | `wrist_cam` | `uint8 (200,200,3)` RGB | 数据集和 π0.5 |
 | `hero_cam` | 展示帧 | 多机位演示视频，不参与策略推理 |
 
-### 6.4 第二天验收
+### 6.4 检查要点
 
 - 能从 USD 场景树中找到机器人、抽屉、目标物体和相机。
 - 能推导 100 Hz 物理频率和 20 Hz 策略频率。
@@ -190,7 +190,7 @@ decimation = 5
 
 对应文件：[`../source/vla_tidybench/isaac/drawer_env_cfg.py`](../source/vla_tidybench/isaac/drawer_env_cfg.py)、[`../assets/medicine_bottle.usda`](../assets/medicine_bottle.usda)。
 
-## 7. 第三天：运动学与统一动作
+## 7. 运动学与统一动作
 
 ### 7.1 坐标系
 
@@ -241,7 +241,7 @@ flowchart LR
 
 例如期望物理位移 `dx=0.02 m`，适配器发送 Isaac 原始动作 `dx=0.04`；Isaac 内部再乘 `0.5`，最终执行 `0.02 m`。
 
-### 7.4 第三天验收
+### 7.4 检查要点
 
 - 能分别说出 FK 和 IK 的输入输出。
 - 能解释 Jacobian 和 DLS 的作用。
@@ -250,7 +250,7 @@ flowchart LR
 
 对应文件：[`action_spec.md`](action_spec.md)、[`../source/vla_tidybench/policy_bridge/action_adapter.py`](../source/vla_tidybench/policy_bridge/action_adapter.py)、[`../source/vla_tidybench/policy_bridge/safety_guard.py`](../source/vla_tidybench/policy_bridge/safety_guard.py)。
 
-## 8. 第四天：可部署观测与特权真值
+## 8. 可部署观测与特权真值
 
 π0.5 的可部署观测包括：
 
@@ -297,7 +297,7 @@ flowchart LR
     Right --> Mask["image mask = False"]
 ```
 
-### 8.2 第四天验收
+### 8.2 检查要点
 
 - 能列出 π0.5 的全部可部署输入。
 - 能列出不得传给 actor 的特权字段。
@@ -305,7 +305,7 @@ flowchart LR
 
 对应文件：[`../source/vla_tidybench/policy_bridge/observation_adapter.py`](../source/vla_tidybench/policy_bridge/observation_adapter.py)、[`../tests/test_observation_adapter.py`](../tests/test_observation_adapter.py)。
 
-## 9. 第五天：真值教师、FSM 与 TaskGraph
+## 9. 真值教师、FSM 与 TaskGraph
 
 脚本教师不是训练出的模型。它读取仿真真值，选择有限状态机阶段，生成任务空间 waypoint，再使用 FK 读取当前末端位姿并通过 DLS IK 产生专家动作。
 
@@ -334,7 +334,7 @@ flowchart TD
     Pick --> FSM["FSM：above → descend → close → lift"]
 ```
 
-### 9.1 第五天验收
+### 9.1 检查要点
 
 - 能区分“一个技能内部的 FSM”和“四技能之间的 TaskGraph”。
 - 能说明真值教师为什么能自动生成数据，也能说明它为什么不是最终部署策略。
@@ -342,7 +342,7 @@ flowchart TD
 
 对应文件：[`../scripts/collect_scripted_drawer.py`](../scripts/collect_scripted_drawer.py)、[`data_collection.md`](data_collection.md)、[`../source/vla_tidybench/task_graph.py`](../source/vla_tidybench/task_graph.py)。
 
-## 10. 第六天：HDF5、物理回放与 Mimic
+## 10. HDF5、物理回放与 Mimic
 
 ### 10.1 HDF5 是什么
 
@@ -394,7 +394,7 @@ flowchart LR
 
 仓库中的抽屉 Mimic JSON 是扩展接口和 smoke 配置，不能描述成已经完成的大规模抽屉数据扩增实验。
 
-### 10.4 第六天验收
+### 10.4 检查要点
 
 - 能画出一个 HDF5 episode 的基本层级。
 - 能说明为何 raw 数据、成功白名单和转换后数据都要分别保存。
@@ -403,7 +403,7 @@ flowchart LR
 
 对应文件：[`../source/vla_tidybench/data/isaac_hdf5.py`](../source/vla_tidybench/data/isaac_hdf5.py)、[`../configs/mimic/drawer_smoke.json`](../configs/mimic/drawer_smoke.json)、[`../tests/test_isaac_hdf5_conversion.py`](../tests/test_isaac_hdf5_conversion.py)。
 
-## 11. 第七天：LeRobot 与 OpenPI Data Transform
+## 11. LeRobot 与 OpenPI Data Transform
 
 ### 11.1 LeRobot 是一种数据结构吗
 
@@ -478,7 +478,7 @@ flowchart LR
 
 错误的 normalization 文件通常不会触发 shape error，而是静默地产生错误的动作幅度，因此比明显报错更危险。
 
-### 11.5 第七天验收
+### 11.5 检查要点
 
 - 能准确回答“LeRobot 不只是一个数据结构，而是机器人数据生态与标准接口”。
 - 能准确回答“OpenPI Data Transform 是预处理，不是 Transformer”。
@@ -509,7 +509,7 @@ flowchart LR
 7. **动作缩放属于核心数据契约。** 丢失 `0.5` 往返会让训练标签和部署动作表示不同物理运动。
 8. **最终药瓶长视频是 π0.5-assisted rollout。** π0.5 在线参与推理，但接触安全轨迹主要由 DLS recovery 提供，不能描述成纯 π0.5 自主成功。
 
-## 14. 前七天总验收清单
+## 14. 理解检查清单
 
 - [ ] 能手绘从观测到动作执行的完整闭环。
 - [ ] 能解释 Isaac Sim 与 Isaac Lab 的区别。
