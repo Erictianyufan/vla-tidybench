@@ -1,5 +1,7 @@
 # π0.5 data and training smoke
 
+模型内部的 Prefix/Suffix、双 Expert Attention、AdaRMS、Flow Matching 和训练运行时说明见 [π0.5 / OpenPI 源码学习手册](openpi_source_study/README.md)。本文只记录本项目实际锁定的接口、命令和 smoke 证据。
+
 ## Locked interfaces
 
 - OpenPI commit: `15a9616a00943ada6c20a0f158e3adb39df2ccac`.

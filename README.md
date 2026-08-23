@@ -26,6 +26,7 @@ VLA-TidyBench 是一个面向具身智能工程实践的仿真项目：在 Isaac
 
 - [数据流与模块输入输出参考](docs/dataflow_and_module_contracts.md)：按照 Isaac 观测、统一动作、教师采集、HDF5、LeRobot 和 OpenPI Data Transform 的实际数据流组织，包含字段契约、张量形状、架构图和理解检查清单。
 - [π0.5 模型架构与项目技术框架](docs/model_architecture_and_project_framework.md)：说明 VLM、Action Expert、Flow Matching、语义条件注入、LoRA，以及 Isaac Sim、Isaac Lab、OpenPI、策略桥、TaskGraph、Mimic、OOD 和残差强化学习之间的连接关系。
+- [π0.5 / OpenPI 源码学习手册](docs/openpi_source_study/README.md)：按推理与数据链、AR mask、双 Expert Attention、AdaRMS/残差、Flow Matching、训练运行时和张量速查六个章节，对照固定 OpenPI commit 与本项目 `18D state / 7D physical action / 32D model width / 16-step horizon` 逐步阅读源码。
 
 ## 系统架构
 
