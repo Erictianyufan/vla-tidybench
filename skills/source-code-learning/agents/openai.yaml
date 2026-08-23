@@ -1,0 +1,4 @@
+interface:
+  display_name: "Source Code Learning"
+  short_description: "Learn codebases through maps, flows, shapes, and guided lessons"
+  default_prompt: "Use $source-code-learning to guide me through this repository step by step."
