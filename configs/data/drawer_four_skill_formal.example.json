@@ -10,11 +10,11 @@
     },
     {
       "file": "drawer_pick_formal.hdf5",
-      "prompt": "pick up the tomato soup can"
+      "prompt": "pick up the medicine bottle"
     },
     {
       "file": "drawer_place_formal.hdf5",
-      "prompt": "put the tomato soup can into the top drawer"
+      "prompt": "put the medicine bottle into the top drawer"
     },
     {
       "file": "drawer_close_formal.hdf5",

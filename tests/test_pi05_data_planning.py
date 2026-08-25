@@ -104,3 +104,15 @@ def test_unsuccessful_episode_cannot_enter_supervised_manifest(tmp_path: Path) -
         assert "successful/recovered episodes only" in str(error)
     else:
         raise AssertionError("unsuccessful episode was accepted")
+
+
+def test_formal_prompts_match_the_medicine_bottle_scene() -> None:
+    expected = {
+        "open the top drawer",
+        "pick up the medicine bottle",
+        "put the medicine bottle into the top drawer",
+        "close the top drawer",
+    }
+    for name in ("drawer_four_skill_formal.json", "drawer_four_skill_hard_recovery.json"):
+        config = json.loads((ROOT / "configs" / "data" / name).read_text(encoding="utf-8"))
+        assert {source["prompt"] for source in config["sources"]} == expected
