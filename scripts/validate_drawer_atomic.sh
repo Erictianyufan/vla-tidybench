@@ -2,7 +2,8 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DATA_ROOT="${DATA_ROOT:-/home/ubuntu/data/vla-tidybench/raw}"
+VLA_TIDYBENCH_DATA="${VLA_TIDYBENCH_DATA:-${HOME}/data/vla-tidybench}"
+DATA_ROOT="${DATA_ROOT:-${VLA_TIDYBENCH_DATA}/raw}"
 cd "${PROJECT_ROOT}"
 
 for skill in open pick close; do

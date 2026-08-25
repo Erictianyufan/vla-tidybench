@@ -1,6 +1,12 @@
 SHELL := /bin/bash
+VLA_TIDYBENCH_DATA ?= /data/$(USER)/vla-tidybench
+FOUR_SKILL_FLAG ?=
+MODE ?= lora
+TRAIN_STATE_FLAG ?= --overwrite
+POLICY_MODE ?= full
+POLICY_CONFIG_FLAG ?= --four-skill
 
-.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-train drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
+.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-four-skill-norm-stats drawer-train drawer-train-lora drawer-train-full drawer-four-skill-train-lora drawer-four-skill-train-full pi05-plan-data pi05-convert-data pi05-prepare-norm-stats pi05-three-stage-synthetic-smoke pi05-three-stage-smoke pi05-three-stage-train pi05-eval-suite pi05-export-final drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
@@ -23,27 +29,27 @@ drawer-scene-smoke:
 
 drawer-open-smoke:
 	SKILL=open NUM_DEMOS=1 MAX_ATTEMPTS=3 \
-	DATASET_FILE=/home/ubuntu/data/vla-tidybench/raw/drawer_open_smoke.hdf5 \
+	DATASET_FILE=$(VLA_TIDYBENCH_DATA)/raw/drawer_open_smoke.hdf5 \
 	./scripts/collect_scripted_drawer.sh --overwrite
 
 drawer-pick-smoke:
 	SKILL=pick NUM_DEMOS=1 MAX_ATTEMPTS=3 \
-	DATASET_FILE=/home/ubuntu/data/vla-tidybench/raw/drawer_pick_smoke.hdf5 \
+	DATASET_FILE=$(VLA_TIDYBENCH_DATA)/raw/drawer_pick_smoke.hdf5 \
 	./scripts/collect_scripted_drawer.sh --overwrite
 
 drawer-place-smoke:
 	SKILL=place NUM_DEMOS=1 MAX_ATTEMPTS=5 MAX_STEPS=520 \
-	DATASET_FILE=/home/ubuntu/data/vla-tidybench/raw/drawer_place_smoke.hdf5 \
+	DATASET_FILE=$(VLA_TIDYBENCH_DATA)/raw/drawer_place_smoke.hdf5 \
 	./scripts/collect_scripted_drawer.sh --overwrite
 
 drawer-close-smoke:
 	SKILL=close NUM_DEMOS=1 MAX_ATTEMPTS=3 \
-	DATASET_FILE=/home/ubuntu/data/vla-tidybench/raw/drawer_close_smoke.hdf5 \
+	DATASET_FILE=$(VLA_TIDYBENCH_DATA)/raw/drawer_close_smoke.hdf5 \
 	./scripts/collect_scripted_drawer.sh --overwrite
 
 drawer-full-smoke:
 	SKILL=full NUM_DEMOS=1 MAX_ATTEMPTS=5 MAX_STEPS=900 \
-	DATASET_FILE=/home/ubuntu/data/vla-tidybench/raw/drawer_full_smoke.hdf5 \
+	DATASET_FILE=$(VLA_TIDYBENCH_DATA)/raw/drawer_full_smoke.hdf5 \
 	./scripts/collect_scripted_drawer.sh --overwrite
 
 drawer-replay:
@@ -57,43 +63,121 @@ drawer-atomic-validate:
 drawer-convert-openpi:
 	./scripts/run_openpi.sh scripts/convert_stack_to_lerobot.py \
 		--config configs/data/drawer_m2_smoke.json \
-		--data-root /home/ubuntu/data/vla-tidybench/raw --overwrite
+		--data-root $(VLA_TIDYBENCH_DATA)/raw --overwrite
 
 drawer-norm-stats:
 	./scripts/run_openpi.sh scripts/compute_drawer_norm_stats.py
 
+drawer-four-skill-norm-stats:
+	./scripts/run_openpi.sh scripts/compute_drawer_norm_stats.py --four-skill
+
+pi05-plan-data:
+	@test -n "$(MAIN_SOURCE_CONFIG)" -a -n "$(HARD_SOURCE_CONFIG)" -a -n "$(REPO_PREFIX)" || \
+		(echo "usage: make pi05-plan-data MAIN_SOURCE_CONFIG=configs/data/main.json HARD_SOURCE_CONFIG=configs/data/hard.json REPO_PREFIX=owner/name" >&2; exit 2)
+	./scripts/run_openpi.sh scripts/plan_pi05_data_splits.py \
+		--main-config "$(MAIN_SOURCE_CONFIG)" --hard-config "$(HARD_SOURCE_CONFIG)" \
+		--data-root $(VLA_TIDYBENCH_DATA)/raw \
+		--output-dir $${MANIFEST_DIR:-$(VLA_TIDYBENCH_DATA)/manifests/pi05-formal} \
+		--repo-prefix "$(REPO_PREFIX)" --overwrite
+
+pi05-convert-data:
+	@manifest_dir=$${MANIFEST_DIR:-$(VLA_TIDYBENCH_DATA)/manifests/pi05-formal}; \
+	for manifest in main_train.json main_validation.json hard_mix_train.json; do \
+		test -f "$$manifest_dir/$$manifest" || { echo "missing $$manifest_dir/$$manifest" >&2; exit 2; }; \
+		./scripts/run_openpi.sh scripts/convert_stack_to_lerobot.py \
+			--config "$$manifest_dir/$$manifest" --data-root $(VLA_TIDYBENCH_DATA)/raw --overwrite || exit $$?; \
+	done
+
+pi05-prepare-norm-stats:
+	@test -n "$(MAIN_DATASET_REPO)" -a -n "$(HARD_DATASET_REPO)" || \
+		(echo "usage: make pi05-prepare-norm-stats MAIN_DATASET_REPO=org/data HARD_DATASET_REPO=org/hard-mix" >&2; exit 2)
+	VLA_TIDYBENCH_DRAWER_FOUR_SKILL_REPO_ID="$(MAIN_DATASET_REPO)" \
+		./scripts/run_openpi.sh scripts/compute_drawer_norm_stats.py --four-skill
+	VLA_TIDYBENCH_DRAWER_FOUR_SKILL_REPO_ID="$(HARD_DATASET_REPO)" \
+		./scripts/run_openpi.sh scripts/compute_drawer_norm_stats.py --four-skill
+
 drawer-train:
-	OPENPI_CUDA_VISIBLE_DEVICES=$${OPENPI_CUDA_VISIBLE_DEVICES:-0,1} \
+	OPENPI_CUDA_VISIBLE_DEVICES=$${OPENPI_CUDA_VISIBLE_DEVICES:-0,1,2} \
 	./scripts/run_openpi.sh scripts/train_drawer_pi05.py \
-		--steps $${STEPS:-2} --batch-size $${BATCH_SIZE:-2} \
-		--fsdp-devices $${FSDP_DEVICES:-2} \
-		--exp-name $${EXP_NAME:-smoke} --overwrite
+		--mode $(MODE) --steps $${STEPS:-2} --batch-size $${BATCH_SIZE:-3} \
+		--fsdp-devices $${FSDP_DEVICES:-3} \
+		--exp-name $${EXP_NAME:-smoke} $(FOUR_SKILL_FLAG) $(TRAIN_STATE_FLAG)
+
+drawer-train-lora:
+	$(MAKE) drawer-train MODE=lora
+
+drawer-train-full:
+	PI05_FSDP_MIN_SIZE_MBYTES=0 $(MAKE) drawer-train MODE=full
+
+drawer-four-skill-train-lora:
+	$(MAKE) drawer-train MODE=lora FOUR_SKILL_FLAG=--four-skill
+
+drawer-four-skill-train-full:
+	PI05_FSDP_MIN_SIZE_MBYTES=0 $(MAKE) drawer-train MODE=full FOUR_SKILL_FLAG=--four-skill
+
+pi05-three-stage-synthetic-smoke:
+	OPENPI_CUDA_VISIBLE_DEVICES=$${OPENPI_CUDA_VISIBLE_DEVICES:-0,1,2} \
+	XLA_PYTHON_CLIENT_ALLOCATOR=$${XLA_PYTHON_CLIENT_ALLOCATOR:-platform} \
+	./scripts/run_openpi.sh scripts/run_pi05_three_stage.py \
+		--smoke --synthetic-data --stage all --overwrite
+
+pi05-three-stage-smoke:
+	OPENPI_CUDA_VISIBLE_DEVICES=$${OPENPI_CUDA_VISIBLE_DEVICES:-0,1,2} \
+	XLA_PYTHON_CLIENT_ALLOCATOR=$${XLA_PYTHON_CLIENT_ALLOCATOR:-platform} \
+	./scripts/run_openpi.sh scripts/run_pi05_three_stage.py --smoke --stage all --overwrite
+
+pi05-three-stage-train:
+	@test -n "$(MAIN_DATASET_REPO)" -a -n "$(HARD_DATASET_REPO)" || \
+		(echo "usage: make pi05-three-stage-train MAIN_DATASET_REPO=org/data HARD_DATASET_REPO=org/hard-mix" >&2; exit 2)
+	OPENPI_CUDA_VISIBLE_DEVICES=$${OPENPI_CUDA_VISIBLE_DEVICES:-0,1,2} \
+	XLA_PYTHON_CLIENT_ALLOCATOR=$${XLA_PYTHON_CLIENT_ALLOCATOR:-platform} \
+	./scripts/run_openpi.sh scripts/run_pi05_three_stage.py --stage all \
+		--main-dataset-repo "$(MAIN_DATASET_REPO)" --hard-dataset-repo "$(HARD_DATASET_REPO)" \
+		--batch-size $${BATCH_SIZE:-3} --fsdp-devices $${FSDP_DEVICES:-3} $(TRAIN_STATE_FLAG)
+
+pi05-export-final:
+	@test -n "$(CHECKPOINT)" -a -n "$(DATASET_REPO)" -a -n "$(EVAL_REPORT)" || \
+		(echo "usage: make pi05-export-final CHECKPOINT=/abs/step DATASET_REPO=org/hard-mix EVAL_REPORT=/abs/evaluation.json" >&2; exit 2)
+	./scripts/run_openpi.sh scripts/export_pi05_checkpoint.py \
+		--checkpoint "$(CHECKPOINT)" --dataset-repo "$(DATASET_REPO)" \
+		--evaluation-report "$(EVAL_REPORT)" --mode $${EXPORT_POLICY_MODE:-full} --replace
+
+pi05-eval-suite:
+	./scripts/run_pi05_eval_suite.py \
+		--output-root $${EVAL_ROOT:-$(VLA_TIDYBENCH_DATA)/eval/pi05-formal} \
+		--host $${POLICY_HOST:-127.0.0.1} --port $${POLICY_PORT:-8000} \
+		--min-success-rate $${MIN_SUCCESS_RATE:-0.6} \
+		--max-p95-infer-ms $${MAX_P95_INFER_MS:-250} $${EVAL_STATE_FLAG:---overwrite}
 
 drawer-policy-smoke:
 	OPENPI_CUDA_VISIBLE_DEVICES=$${POLICY_GPU:-1} ./scripts/run_openpi.sh scripts/smoke_drawer_policy.py \
-		--checkpoint /home/ubuntu/data/vla-tidybench/checkpoints/openpi-runs/pi05_tidybench_drawer_lora/drawer-smoke/1 \
-		--dataset /home/ubuntu/data/vla-tidybench/raw/drawer_open_smoke.hdf5
+		--checkpoint $${CHECKPOINT:-$(VLA_TIDYBENCH_DATA)/checkpoints/openpi-runs/pi05_tidybench_drawer_lora/drawer-smoke/1} \
+		$${POLICY_INPUT_FLAG:---dataset $(VLA_TIDYBENCH_DATA)/raw/drawer_open_smoke.hdf5} \
+		--mode $(POLICY_MODE) $(POLICY_CONFIG_FLAG)
 
 drawer-policy-serve:
 	@test -n "$(CHECKPOINT)" || (echo "usage: make drawer-policy-serve CHECKPOINT=/abs/checkpoint" >&2; exit 2)
 	OPENPI_CUDA_VISIBLE_DEVICES=$${POLICY_GPU:-1} ./scripts/run_openpi.sh scripts/serve_drawer_policy.py \
-		--checkpoint "$(CHECKPOINT)" --port $${POLICY_PORT:-8000}
+		--checkpoint "$(CHECKPOINT)" --mode $(POLICY_MODE) $(POLICY_CONFIG_FLAG) \
+		--port $${POLICY_PORT:-8000}
 
 drawer-policy-run:
 	./scripts/run_isaac.sh scripts/run_drawer_pi05_closed_loop.py \
-		--device cuda:0 --enable_cameras --viz $${VIZ:-none} --port $${POLICY_PORT:-8000} \
-		--output $${OUTPUT:-/home/ubuntu/data/vla-tidybench/eval/pi05_open_closed_loop.hdf5}
+		--device cuda:0 --enable_cameras --viz $${VIZ:-none} \
+		--host $${POLICY_HOST:-127.0.0.1} --port $${POLICY_PORT:-8000} \
+		--skill $${POLICY_SKILL:-open} \
+		--output $${OUTPUT:-$(VLA_TIDYBENCH_DATA)/eval/pi05_open_closed_loop.hdf5}
 
 drawer-demo:
 	FFMPEG_BIN=$$(./scripts/run_openpi.sh -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())') \
 	./scripts/run_openpi.sh scripts/render_skill_suite.py \
-		--data-root /home/ubuntu/data/vla-tidybench/raw \
+		--data-root $(VLA_TIDYBENCH_DATA)/raw \
 		--output artifacts/demo/vla-tidybench-skill-suite.mp4
 
 continuous-medicine-demo:
 	./scripts/run_isaac.sh scripts/collect_scripted_drawer.py \
 		--skill full --num_demos 1 --max_attempts 1 --max_steps 650 --seed 610 --overwrite \
-		--dataset_file /home/ubuntu/data/vla-tidybench/eval/drawer_full_medicine_pi05_live.hdf5 \
+		--dataset_file $(VLA_TIDYBENCH_DATA)/eval/drawer_full_medicine_pi05_live.hdf5 \
 		--showcase --policy-host $${POLICY_HOST:-127.0.0.1} --policy-port $${POLICY_PORT:-8000} \
 		--policy-residual-weight $${POLICY_RESIDUAL_WEIGHT:-0.0001} --policy-replan-steps 4 \
 		--device cuda:0 --enable_cameras --viz none
@@ -101,14 +185,14 @@ continuous-medicine-demo:
 pick-rl-train:
 	./scripts/run_isaac.sh scripts/train_pick_residual_sac.py \
 		--mode train --device cuda:0 --viz none --timesteps $${RL_STEPS:-200} \
-		--checkpoint /home/ubuntu/data/vla-tidybench/checkpoints/pick_residual_sac_tomato \
+		--checkpoint $(VLA_TIDYBENCH_DATA)/checkpoints/pick_residual_sac_tomato \
 		--metrics results/metrics/pick_residual_sac_tomato.json
 
 pick-rl-record:
 	./scripts/run_isaac.sh scripts/train_pick_residual_sac.py \
 		--mode record --device cuda:0 --enable_cameras --viz none --showcase \
-		--checkpoint /home/ubuntu/data/vla-tidybench/checkpoints/pick_residual_sac_tomato \
-		--output /home/ubuntu/data/vla-tidybench/eval/pick_residual_tomato_rl_success.hdf5
+		--checkpoint $(VLA_TIDYBENCH_DATA)/checkpoints/pick_residual_sac_tomato \
+		--output $(VLA_TIDYBENCH_DATA)/eval/pick_residual_tomato_rl_success.hdf5
 
 media-gifs:
 	./scripts/run_openpi.sh scripts/render_all_video_gifs.py --media-dir docs/media
@@ -132,12 +216,12 @@ record:
 
 scripted-smoke:
 	NUM_DEMOS=1 MAX_ATTEMPTS=4 SEED=41 \
-	DATASET=/home/ubuntu/data/vla-tidybench/raw/stack_scripted_smoke.hdf5 \
+	DATASET=$(VLA_TIDYBENCH_DATA)/raw/stack_scripted_smoke.hdf5 \
 	./scripts/collect_scripted_stack.sh --overwrite
 
 scripted-collect:
 	NUM_DEMOS=$${NUM_DEMOS:-7} MAX_ATTEMPTS=$${MAX_ATTEMPTS:-28} \
-	DATASET=/home/ubuntu/data/vla-tidybench/raw/stack_scripted.hdf5 \
+	DATASET=$(VLA_TIDYBENCH_DATA)/raw/stack_scripted.hdf5 \
 	./scripts/collect_scripted_stack.sh --overwrite
 
 replay:
@@ -152,7 +236,7 @@ mimic-smoke:
 convert-openpi-smoke:
 	./scripts/run_openpi.sh scripts/convert_stack_to_lerobot.py \
 		--config configs/data/stack_m1_smoke.json \
-		--data-root /home/ubuntu/data/vla-tidybench/raw \
+		--data-root $(VLA_TIDYBENCH_DATA)/raw \
 		--overwrite
 
 openpi-norm-stats:

@@ -5,16 +5,22 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
 import h5py
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_ROOT = Path("/home/ubuntu/data/vla-tidybench/raw")
-CHECKPOINT = Path(
-    "/home/ubuntu/data/vla-tidybench/checkpoints/openpi-runs/"
-    "pi05_tidybench_drawer_lora/drawer-smoke/1"
+ARTIFACT_ROOT = Path(os.environ.get("VLA_TIDYBENCH_DATA", Path.home() / "data" / "vla-tidybench"))
+DATA_ROOT = ARTIFACT_ROOT / "raw"
+CHECKPOINT = (
+    ARTIFACT_ROOT
+    / "checkpoints"
+    / "openpi-runs"
+    / "pi05_tidybench_drawer_lora"
+    / "drawer-smoke"
+    / "1"
 )
 
 

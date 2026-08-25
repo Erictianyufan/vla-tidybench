@@ -24,9 +24,9 @@ if [[ -n "${FFMPEG_BIN:-}" ]]; then
   ffmpeg_bin=$FFMPEG_BIN
 elif command -v ffmpeg >/dev/null 2>&1; then
   ffmpeg_bin=$(command -v ffmpeg)
-elif [[ -x /home/ubuntu/openpi/.venv/bin/python ]]; then
+elif [[ -x "${OPENPI_ROOT:-${HOME}/openpi}/.venv/bin/python" ]]; then
   ffmpeg_bin=$(
-    /home/ubuntu/openpi/.venv/bin/python -c \
+    "${OPENPI_ROOT:-${HOME}/openpi}/.venv/bin/python" -c \
       'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())'
   )
 else

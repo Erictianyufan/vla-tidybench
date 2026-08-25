@@ -2,7 +2,8 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DATASET="/home/ubuntu/data/vla-tidybench/raw/stack_human.hdf5"
+VLA_TIDYBENCH_DATA="${VLA_TIDYBENCH_DATA:-${HOME}/data/vla-tidybench}"
+DATASET="${DATASET:-${VLA_TIDYBENCH_DATA}/raw/stack_human.hdf5}"
 
 echo "This command is interactive. Run it inside the cloud desktop terminal."
 echo "Dataset: ${DATASET}"

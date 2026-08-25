@@ -5,12 +5,15 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 from pathlib import Path
 
 from vla_tidybench.openpi.drawer_config import make_config as make_open_config
 from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
 
-OPENPI_SCRIPT = Path("/home/ubuntu/openpi/scripts/compute_norm_stats.py")
+
+def openpi_script() -> Path:
+    return Path(os.environ.get("OPENPI_ROOT", Path.home() / "openpi")) / "scripts" / "compute_norm_stats.py"
 
 
 def main() -> int:
@@ -18,9 +21,10 @@ def main() -> int:
     parser.add_argument("--max-frames", type=int)
     parser.add_argument("--four-skill", action="store_true")
     args = parser.parse_args()
-    spec = importlib.util.spec_from_file_location("openpi_compute_norm_stats", OPENPI_SCRIPT)
+    script = openpi_script()
+    spec = importlib.util.spec_from_file_location("openpi_compute_norm_stats", script)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load {OPENPI_SCRIPT}")
+        raise RuntimeError(f"cannot load {script}")
     official = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(official)
     config = (make_four_skill_config if args.four_skill else make_open_config)()

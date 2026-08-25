@@ -2,7 +2,8 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-data_root=${DATA_ROOT:-/home/ubuntu/data/vla-tidybench/raw}
+VLA_TIDYBENCH_DATA="${VLA_TIDYBENCH_DATA:-${HOME}/data/vla-tidybench}"
+data_root=${DATA_ROOT:-${VLA_TIDYBENCH_DATA}/raw}
 cd "$repo_root"
 
 make drawer-replay SKILL=open DATASET_FILE="$data_root/drawer_open_smoke.hdf5"

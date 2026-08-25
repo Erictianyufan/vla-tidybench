@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "repo_id": "owner/vla_tidybench_drawer_v1_unsplit",
+  "fps": 20,
+  "image_writer_threads": 8,
+  "sources": [
+    {
+      "file": "drawer_open_formal.hdf5",
+      "prompt": "open the top drawer"
+    },
+    {
+      "file": "drawer_pick_formal.hdf5",
+      "prompt": "pick up the tomato soup can"
+    },
+    {
+      "file": "drawer_place_formal.hdf5",
+      "prompt": "put the tomato soup can into the top drawer"
+    },
+    {
+      "file": "drawer_close_formal.hdf5",
+      "prompt": "close the top drawer"
+    }
+  ]
+}

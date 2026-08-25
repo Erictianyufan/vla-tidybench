@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from isaaclab.app import AppLauncher
@@ -30,7 +31,10 @@ parser.add_argument("--showcase", action="store_true", help="record three camera
 parser.add_argument(
     "--pi05-proposals",
     type=Path,
-    default=Path("/home/ubuntu/data/vla-tidybench/eval/four_skill_success/pick.hdf5"),
+    default=Path(os.environ.get("VLA_TIDYBENCH_DATA", Path.home() / "data" / "vla-tidybench"))
+    / "eval"
+    / "four_skill_success"
+    / "pick.hdf5",
 )
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()

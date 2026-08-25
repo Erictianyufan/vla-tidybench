@@ -5,17 +5,21 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 from pathlib import Path
 
 from vla_tidybench.openpi.stack_config import make_config
 
-OPENPI_TRAIN = Path("/home/ubuntu/openpi/scripts/train.py")
+
+def openpi_train_script() -> Path:
+    return Path(os.environ.get("OPENPI_ROOT", Path.home() / "openpi")) / "scripts" / "train.py"
 
 
 def load_official_train():
-    spec = importlib.util.spec_from_file_location("openpi_train", OPENPI_TRAIN)
+    train_script = openpi_train_script()
+    spec = importlib.util.spec_from_file_location("openpi_train", train_script)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load {OPENPI_TRAIN}")
+        raise RuntimeError(f"cannot load {train_script}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

@@ -20,16 +20,17 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--default-prompt", default="open the top drawer")
     parser.add_argument("--four-skill", action="store_true")
+    parser.add_argument("--mode", choices=("lora", "expert", "full"), default="expert")
     args = parser.parse_args()
     make_config = make_four_skill_config if args.four_skill else make_open_config
     policy = policy_config.create_trained_policy(
-        make_config(), args.checkpoint, default_prompt=args.default_prompt
+        make_config(finetune_mode=args.mode), args.checkpoint, default_prompt=args.default_prompt
     )
     metadata = dict(policy.metadata)
     metadata.update(
         {
             "project": "VLA-TidyBench",
-            "policy": "pi0.5-drawer-lora",
+            "policy": f"pi0.5-drawer-{args.mode}",
             "checkpoint": str(args.checkpoint),
         }
     )

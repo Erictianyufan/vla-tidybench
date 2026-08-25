@@ -5,17 +5,21 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 from pathlib import Path
 
 from vla_tidybench.openpi.stack_config import make_config
 
-OPENPI_SCRIPT = Path("/home/ubuntu/openpi/scripts/compute_norm_stats.py")
+
+def openpi_script() -> Path:
+    return Path(os.environ.get("OPENPI_ROOT", Path.home() / "openpi")) / "scripts" / "compute_norm_stats.py"
 
 
 def load_official_script():
-    spec = importlib.util.spec_from_file_location("openpi_compute_norm_stats", OPENPI_SCRIPT)
+    script = openpi_script()
+    spec = importlib.util.spec_from_file_location("openpi_compute_norm_stats", script)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load {OPENPI_SCRIPT}")
+        raise RuntimeError(f"cannot load {script}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

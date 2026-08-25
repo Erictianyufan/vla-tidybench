@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 
@@ -16,14 +17,19 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--host", default="127.0.0.1")
 parser.add_argument("--port", type=int, default=8000)
-parser.add_argument("--prompt", default="open the top drawer")
+parser.add_argument("--prompt", help="defaults to the canonical prompt for --skill")
+parser.add_argument("--skill", choices=("open", "pick", "place", "close"), default="open")
 parser.add_argument("--max-steps", type=int, default=360)
 parser.add_argument("--execute-steps", type=int, default=4)
 parser.add_argument("--seed", type=int, default=2026)
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--showcase", action="store_true", help="add room, props, and 720p hero camera")
 parser.add_argument("--teacher-preview", action="store_true", help="use the scripted OPEN teacher for camera QA")
-parser.add_argument("--teacher-skill", choices=("open", "pick", "place", "close"), default="open")
+parser.add_argument(
+    "--teacher-skill",
+    choices=("open", "pick", "place", "close"),
+    help="deprecated compatibility alias; also selects --skill for teacher previews",
+)
 parser.add_argument(
     "--dls-contact-recovery",
     action="store_true",
@@ -33,12 +39,24 @@ parser.add_argument("--policy-residual-weight", type=float, default=0.02)
 parser.add_argument(
     "--recovery-demo",
     type=Path,
-    default=Path("/home/ubuntu/data/vla-tidybench/raw/drawer_open_smoke.hdf5"),
+    default=Path(os.environ.get("VLA_TIDYBENCH_DATA", Path.home() / "data" / "vla-tidybench"))
+    / "raw"
+    / "drawer_open_smoke.hdf5",
 )
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
+skill = args_cli.teacher_skill or args_cli.skill
+skill_prompts = {
+    "open": "open the top drawer",
+    "pick": "pick up the tomato soup can",
+    "place": "put the tomato soup can into the top drawer",
+    "close": "close the top drawer",
+}
+args_cli.prompt = args_cli.prompt or skill_prompts[skill]
 if args_cli.dls_contact_recovery and args_cli.teacher_preview:
     parser.error("--dls-contact-recovery and --teacher-preview are mutually exclusive")
+if args_cli.dls_contact_recovery and skill != "open":
+    parser.error("--dls-contact-recovery currently supports only --skill open")
 if not 0.0 <= args_cli.policy_residual_weight <= 0.1:
     parser.error("--policy-residual-weight must be in [0, 0.1]")
 app_launcher = AppLauncher(args_cli)
@@ -75,10 +93,9 @@ def main() -> int:
     cfg = TidyBenchDrawerShowcaseEnvCfg() if args_cli.showcase else TidyBenchDrawerEnvCfg()
     cfg.sim.device = args_cli.device
     cfg.scene.num_envs = 1
-    assisted_run = args_cli.teacher_preview or args_cli.dls_contact_recovery
-    if assisted_run and args_cli.teacher_skill in ("place", "close"):
+    if skill in ("place", "close"):
         cfg.scene.cabinet.init_state.joint_pos["drawer_top_joint"] = 0.36
-    if assisted_run and args_cli.teacher_skill == "place":
+    if skill == "place":
         cfg.scene.cabinet.actuators["drawers"].stiffness = 10000.0
         cfg.scene.cabinet.actuators["drawers"].damping = 500.0
     env = gym.make("Isaac-Open-Drawer-Franka-IK-Rel-v0", cfg=cfg).unwrapped
@@ -93,6 +110,7 @@ def main() -> int:
     policy_actions_proposed: list[np.ndarray] = []
     recovery_actions_base: list[np.ndarray] = []
     latencies: list[float] = []
+    policy_metadata: dict[str, object] = {}
     success = False
     try:
         env.reset(seed=args_cli.seed)
@@ -112,11 +130,13 @@ def main() -> int:
             else PolicyClient(args_cli.host, args_cli.port, timeout_s=120.0)
         )
         if client_context is not None:
-            print("policy metadata", json.dumps(client_context.metadata, indent=2, default=str), flush=True)
+            policy_metadata = dict(client_context.metadata)
+            print("policy metadata", json.dumps(policy_metadata, indent=2, default=str), flush=True)
         teacher_actions = None
         teacher_index = 0
         if args_cli.teacher_preview:
-            demo_path = f"/home/ubuntu/data/vla-tidybench/raw/drawer_{args_cli.teacher_skill}_smoke.hdf5"
+            data_root = Path(os.environ.get("VLA_TIDYBENCH_DATA", Path.home() / "data" / "vla-tidybench"))
+            demo_path = data_root / "raw" / f"drawer_{skill}_smoke.hdf5"
             with h5py.File(demo_path, "r") as demo_file:
                 demo = demo_file["data"][sorted(demo_file["data"].keys())[0]]
                 teacher_actions = np.asarray(demo["actions"], dtype=np.float32)
@@ -177,11 +197,11 @@ def main() -> int:
                     step += 1
                     drawer = float(env.scene["cabinet"].data.joint_pos.torch[0, drawer_idx])
                     obj = env.scene["target_object"].data.root_pos_w.torch[0]
-                    if args_cli.teacher_skill == "open":
+                    if skill == "open":
                         success = drawer >= 0.30
-                    elif args_cli.teacher_skill == "pick":
+                    elif skill == "pick":
                         success = float(obj[2]) >= 0.12
-                    elif args_cli.teacher_skill == "place":
+                    elif skill == "place":
                         handle_x = env.scene["cabinet_frame"].data.target_pos_w.torch[0, 0, 0]
                         success = bool(
                             obj[2] > 0.68
@@ -189,7 +209,7 @@ def main() -> int:
                             and obj[0] > handle_x + 0.023
                             and abs(obj[1]) < 0.26
                         )
-                    elif args_cli.teacher_skill == "close":
+                    elif skill == "close":
                         teacher_length = 0 if teacher_actions is None else len(teacher_actions)
                         success = drawer <= 0.04 and step >= min(40, teacher_length)
                         if success:
@@ -210,16 +230,17 @@ def main() -> int:
             if teacher_actions is not None:
                 policy_name = "scripted-teacher-camera-preview"
             elif recovery_actions is not None:
-                policy_name = "pi0.5-drawer-lora+dls-contact-recovery"
+                deployed_policy = str(policy_metadata.get("policy", "pi0.5-drawer"))
+                policy_name = f"{deployed_policy}+dls-contact-recovery"
             else:
-                policy_name = "pi0.5-drawer-lora"
+                policy_name = str(policy_metadata.get("policy", "pi0.5-drawer"))
             output.attrs["policy"] = policy_name
+            output.attrs["policy_checkpoint"] = str(policy_metadata.get("checkpoint", ""))
             output.attrs["prompt"] = args_cli.prompt
-            output.attrs["skill"] = (
-                args_cli.teacher_skill
-                if teacher_actions is not None or recovery_actions is not None
-                else "open"
-            )
+            output.attrs["skill"] = skill
+            output.attrs["seed"] = args_cli.seed
+            output.attrs["execute_steps"] = args_cli.execute_steps
+            output.attrs["max_steps"] = args_cli.max_steps
             output.attrs["success"] = success
             output.attrs["mean_infer_ms"] = float(np.mean(latencies)) if latencies else -1.0
             output.attrs["policy_residual_weight"] = (
@@ -230,6 +251,7 @@ def main() -> int:
             if frames_hero:
                 output.create_dataset("hero_cam", data=np.asarray(frames_hero), compression="gzip")
             output.create_dataset("actions", data=np.asarray(actions_executed, dtype=np.float32))
+            output.create_dataset("inference_ms", data=np.asarray(latencies, dtype=np.float32))
             if policy_actions_proposed:
                 output.create_dataset(
                     "policy_actions", data=np.asarray(policy_actions_proposed, dtype=np.float32)

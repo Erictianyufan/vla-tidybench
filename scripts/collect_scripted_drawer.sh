@@ -3,7 +3,8 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKILL="${SKILL:-open}"
-DATASET="${DATASET_FILE:-${DATASET:-/home/ubuntu/data/vla-tidybench/raw/drawer_${SKILL}_scripted.hdf5}}"
+VLA_TIDYBENCH_DATA="${VLA_TIDYBENCH_DATA:-${HOME}/data/vla-tidybench}"
+DATASET="${DATASET_FILE:-${DATASET:-${VLA_TIDYBENCH_DATA}/raw/drawer_${SKILL}_scripted.hdf5}}"
 
 cd "${PROJECT_ROOT}"
 exec ./scripts/run_isaac.sh scripts/collect_scripted_drawer.py \

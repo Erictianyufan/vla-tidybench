@@ -18,7 +18,7 @@ VLA-TidyBench 是一个面向具身智能工程实践的仿真项目：在 Isaac
 - 7D 相对末端动作：`[dx, dy, dz, dRx, dRy, dRz, gripper]`，通过 DLS 逆运动学执行。
 - 物体真值定位、有限状态机规划和自动示范采集；训练数据只保留 RGB、本体状态、语言和动作。
 - HDF5 回放检查、LeRobot 数据转换和归一化统计量计算。
-- OpenPI π0.5 LoRA 短训练、Orbax checkpoint 恢复与 WebSocket 策略服务。
+- OpenPI π0.5 LoRA 基线、低显存全量微调、困难样本恢复训练、Orbax checkpoint 导出与 WebSocket 策略服务。
 - Isaac 闭环客户端、动作适配、安全约束和三机位同步录制。
 - Mimic 数据扩增、OOD 评测和冻结 VLA 残差强化学习的扩展接口。
 
@@ -26,6 +26,7 @@ VLA-TidyBench 是一个面向具身智能工程实践的仿真项目：在 Isaac
 
 - [数据流与模块输入输出参考](docs/dataflow_and_module_contracts.md)：按照 Isaac 观测、统一动作、教师采集、HDF5、LeRobot 和 OpenPI Data Transform 的实际数据流组织，包含字段契约、张量形状、架构图和理解检查清单。
 - [π0.5 模型架构与项目技术框架](docs/model_architecture_and_project_framework.md)：说明 VLM、Action Expert、Flow Matching、语义条件注入、LoRA，以及 Isaac Sim、Isaac Lab、OpenPI、策略桥、TaskGraph、Mimic、OOD 和残差强化学习之间的连接关系。
+- [服务器三阶段微调与实时推理手册](docs/server_finetuning.md)：覆盖机械盘数据布局、π0.5-DROID 权重准备、LoRA / 全量 Adafactor / 困难样本三阶段训练、四技能自主评估门禁、检查点导出和仿真策略服务。
 - [π0.5 / OpenPI 源码学习手册](docs/openpi_source_study/README.md)：按推理与数据链、AR mask、双 Expert Attention、AdaRMS/残差、Flow Matching、训练运行时和张量速查六个章节，对照固定 OpenPI commit 与本项目 `18D state / 7D physical action / 32D model width / 16-step horizon` 逐步阅读源码。
 - [Codex `source-code-learning` Skill](skills/source-code-learning/SKILL.md)：将“项目地图 → 端到端调用链 → 数据/张量契约 → 核心机制 → 训练与运行时 → 验收复述”封装为可复用源码学习工作流；安装后可用 `$source-code-learning` 显式调用，也支持匹配源码学习请求时自动触发。
 
