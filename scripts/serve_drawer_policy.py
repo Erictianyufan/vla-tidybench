@@ -7,11 +7,20 @@ import argparse
 import logging
 from pathlib import Path
 
+import numpy as np
 from openpi.policies import policy_config
 from openpi.serving.websocket_policy_server import WebsocketPolicyServer
+from openpi.shared import normalize
 from vla_tidybench.openpi.drawer_config import make_config as make_open_config
 from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
 from vla_tidybench.openpi.deployment import load_deployment
+
+
+def identity_norm_stats() -> dict[str, normalize.NormStats]:
+    zeros = np.zeros(32, dtype=np.float32)
+    ones = np.ones(32, dtype=np.float32)
+    stats = normalize.NormStats(mean=zeros, std=ones, q01=-ones, q99=ones)
+    return {"state": stats, "actions": stats}
 
 
 def main() -> None:
@@ -29,7 +38,14 @@ def main() -> None:
         action="store_true",
         help="permit a systems-smoke deployment without a passing evaluation report",
     )
+    parser.add_argument(
+        "--synthetic-identity-norm",
+        action="store_true",
+        help="systems smoke only: serve without dataset-derived normalization statistics",
+    )
     args = parser.parse_args()
+    if args.synthetic_identity_norm and not args.allow_unvalidated_deployment:
+        parser.error("--synthetic-identity-norm requires --allow-unvalidated-deployment")
 
     deployment = None
     if args.deployment is not None:
@@ -49,7 +65,10 @@ def main() -> None:
 
     make_config = make_four_skill_config if four_skill else make_open_config
     policy = policy_config.create_trained_policy(
-        make_config(finetune_mode=mode), checkpoint, default_prompt=args.default_prompt
+        make_config(finetune_mode=mode),
+        checkpoint,
+        default_prompt=args.default_prompt,
+        norm_stats=identity_norm_stats() if args.synthetic_identity_norm else None,
     )
     metadata = dict(policy.metadata)
     metadata.update(
@@ -59,6 +78,7 @@ def main() -> None:
             "checkpoint": str(checkpoint),
             "deployment": str(deployment.root) if deployment is not None else None,
             "evaluation_gate_passed": bool(deployment and deployment.evaluation),
+            "synthetic_identity_norm": args.synthetic_identity_norm,
         }
     )
     WebsocketPolicyServer(policy, args.host, args.port, metadata).serve_forever()

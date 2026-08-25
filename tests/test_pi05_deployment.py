@@ -71,3 +71,12 @@ def test_unvalidated_bundle_requires_explicit_opt_out(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="no evaluation"):
         load_deployment(deployment)
     assert load_deployment(deployment, require_validated=False).evaluation is None
+
+
+def test_policy_probe_checks_action_shape_and_checkpoint_metadata() -> None:
+    source = (Path(__file__).resolve().parents[1] / "scripts" / "probe_drawer_policy.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'actions.shape != (16, 7)' in source
+    assert 'metadata.get("checkpoint")' in source
+    assert 'metadata.get("evaluation_gate_passed"' in source

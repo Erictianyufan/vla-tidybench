@@ -230,6 +230,14 @@ make pi05-verify-deployment DEPLOYMENT=$DEPLOYMENT
 make pi05-deployment-serve DEPLOYMENT=$DEPLOYMENT POLICY_GPU=1
 ```
 
+From a second shell, verify the real WebSocket serialization, handshake,
+checkpoint identity, `(16, 7)` response and warm inference latency:
+
+```bash
+POLICY_PROBE_FLAG="--expect-deployment $DEPLOYMENT --require-evaluation --max-last-infer-ms 250" \
+  make pi05-policy-probe
+```
+
 The verifier resolves the checkpoint link, checks required Orbax metadata,
 file count and byte count, clean-code provenance, evaluation SHA-256,
 autonomous-only status, gate result, and exact checkpoint identity before model
@@ -246,6 +254,16 @@ scaling:
 make drawer-policy-smoke \
   CHECKPOINT=/absolute/numeric/checkpoint \
   POLICY_MODE=full POLICY_CONFIG_FLAG=--four-skill POLICY_INPUT_FLAG=--synthetic
+```
+
+An unvalidated synthetic systems bundle can also exercise the persistent
+WebSocket service, but both bypasses must be explicit and are advertised in the
+server handshake:
+
+```bash
+DEPLOYMENT_VALIDATION_FLAG=--allow-unvalidated \
+DEPLOYMENT_SERVE_FLAG="--allow-unvalidated-deployment --synthetic-identity-norm" \
+  make pi05-deployment-serve DEPLOYMENT=/absolute/synthetic-smoke-deployment
 ```
 
 On the Isaac Lab machine, start the camera-enabled closed loop and point it at

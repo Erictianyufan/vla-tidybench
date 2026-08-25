@@ -9,7 +9,7 @@ PI05_MAIN_CONFIG ?= configs/data/drawer_four_skill_formal.json
 PI05_HARD_CONFIG ?= configs/data/drawer_four_skill_hard_recovery.json
 PI05_REPO_PREFIX ?= $(USER)/vla_tidybench_drawer_v1
 
-.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-four-skill-norm-stats drawer-train drawer-train-lora drawer-train-full drawer-four-skill-train-lora drawer-four-skill-train-full pi05-plan-data pi05-convert-data pi05-prepare-norm-stats pi05-formal-prepare pi05-formal-pipeline pi05-three-stage-synthetic-smoke pi05-three-stage-smoke pi05-three-stage-train pi05-eval-suite pi05-export-final pi05-verify-deployment pi05-deployment-serve drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
+.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-four-skill-norm-stats drawer-train drawer-train-lora drawer-train-full drawer-four-skill-train-lora drawer-four-skill-train-full pi05-plan-data pi05-convert-data pi05-prepare-norm-stats pi05-formal-prepare pi05-formal-pipeline pi05-three-stage-synthetic-smoke pi05-three-stage-smoke pi05-three-stage-train pi05-eval-suite pi05-export-final pi05-verify-deployment pi05-deployment-serve pi05-policy-probe drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
@@ -170,6 +170,12 @@ pi05-deployment-serve: pi05-verify-deployment
 	OPENPI_CUDA_VISIBLE_DEVICES=$${POLICY_GPU:-1} ./scripts/run_openpi.sh scripts/serve_drawer_policy.py \
 		--deployment "$(DEPLOYMENT)" --port $${POLICY_PORT:-8000} \
 		$${DEPLOYMENT_SERVE_FLAG:-}
+
+pi05-policy-probe:
+	./scripts/run_openpi.sh scripts/probe_drawer_policy.py \
+		--host $${POLICY_HOST:-127.0.0.1} --port $${POLICY_PORT:-8000} \
+		--runs $${PROBE_RUNS:-2} --expect-mode $${POLICY_MODE:-full} \
+		$${POLICY_PROBE_FLAG:-}
 
 pi05-eval-suite:
 	./scripts/run_pi05_eval_suite.py \
