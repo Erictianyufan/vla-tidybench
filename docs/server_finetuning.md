@@ -31,7 +31,13 @@ checkpoints are consequently stored on the selected data disk.
 ## Deterministic formal-data preparation
 
 Copy the four nominal HDF5 files and four successful hard-recovery HDF5 files
-to `$VLA_TIDYBENCH_DATA/raw`. Start from the checked-in source templates:
+to `$VLA_TIDYBENCH_DATA/raw`. The server-ready source manifests are:
+
+- `configs/data/drawer_four_skill_formal.json`
+- `configs/data/drawer_four_skill_hard_recovery.json`
+
+Portable examples for changing filenames or repository ownership are also
+checked in:
 
 - `configs/data/drawer_four_skill_formal.example.json`
 - `configs/data/drawer_four_skill_hard_recovery.example.json`
@@ -49,6 +55,20 @@ make pi05-plan-data \
 
 make pi05-convert-data
 ```
+
+After the eight canonical files are present, the complete preparation and
+three-stage training sequence can be launched with one resumable command:
+
+```bash
+make pi05-formal-pipeline \
+  PI05_REPO_PREFIX=scuee_user06/vla_tidybench_drawer_v1 \
+  TRAIN_STATE_FLAG=--resume
+```
+
+For a fresh experiment use `TRAIN_STATE_FLAG=--overwrite`. The pipeline invokes
+the audited planner before any training, converts all three frozen manifests,
+computes nominal and hard-mixture normalization statistics independently, and
+then launches the LoRA, full, and hard-recovery stages.
 
 The planner defaults to at least eight nominal training, two validation and two
 hard-recovery episodes per prompt. It audits HDF5 shapes/success attributes,

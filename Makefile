@@ -5,8 +5,11 @@ MODE ?= lora
 TRAIN_STATE_FLAG ?= --overwrite
 POLICY_MODE ?= full
 POLICY_CONFIG_FLAG ?= --four-skill
+PI05_MAIN_CONFIG ?= configs/data/drawer_four_skill_formal.json
+PI05_HARD_CONFIG ?= configs/data/drawer_four_skill_hard_recovery.json
+PI05_REPO_PREFIX ?= $(USER)/vla_tidybench_drawer_v1
 
-.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-four-skill-norm-stats drawer-train drawer-train-lora drawer-train-full drawer-four-skill-train-lora drawer-four-skill-train-full pi05-plan-data pi05-convert-data pi05-prepare-norm-stats pi05-three-stage-synthetic-smoke pi05-three-stage-smoke pi05-three-stage-train pi05-eval-suite pi05-export-final pi05-verify-deployment pi05-deployment-serve drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
+.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-four-skill-norm-stats drawer-train drawer-train-lora drawer-train-full drawer-four-skill-train-lora drawer-four-skill-train-full pi05-plan-data pi05-convert-data pi05-prepare-norm-stats pi05-formal-prepare pi05-formal-pipeline pi05-three-stage-synthetic-smoke pi05-three-stage-smoke pi05-three-stage-train pi05-eval-suite pi05-export-final pi05-verify-deployment pi05-deployment-serve drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
@@ -95,6 +98,21 @@ pi05-prepare-norm-stats:
 		./scripts/run_openpi.sh scripts/compute_drawer_norm_stats.py --four-skill
 	VLA_TIDYBENCH_DRAWER_FOUR_SKILL_REPO_ID="$(HARD_DATASET_REPO)" \
 		./scripts/run_openpi.sh scripts/compute_drawer_norm_stats.py --four-skill
+
+pi05-formal-prepare:
+	$(MAKE) pi05-plan-data \
+		MAIN_SOURCE_CONFIG="$(PI05_MAIN_CONFIG)" HARD_SOURCE_CONFIG="$(PI05_HARD_CONFIG)" \
+		REPO_PREFIX="$(PI05_REPO_PREFIX)"
+	$(MAKE) pi05-convert-data
+	$(MAKE) pi05-prepare-norm-stats \
+		MAIN_DATASET_REPO="$(PI05_REPO_PREFIX)_train" \
+		HARD_DATASET_REPO="$(PI05_REPO_PREFIX)_hard_mix"
+
+pi05-formal-pipeline: pi05-formal-prepare
+	$(MAKE) pi05-three-stage-train \
+		MAIN_DATASET_REPO="$(PI05_REPO_PREFIX)_train" \
+		HARD_DATASET_REPO="$(PI05_REPO_PREFIX)_hard_mix" \
+		TRAIN_STATE_FLAG="$(TRAIN_STATE_FLAG)"
 
 drawer-train:
 	OPENPI_CUDA_VISIBLE_DEVICES=$${OPENPI_CUDA_VISIBLE_DEVICES:-0,1,2} \
