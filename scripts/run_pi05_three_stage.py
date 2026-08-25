@@ -12,6 +12,7 @@ import subprocess
 
 MVP_REPO = "erictianyufan/vla_tidybench_drawer_four_skill_mvp"
 FULL_CONFIG_NAME = "pi05_tidybench_drawer_four_skill_full"
+LORA_CONFIG_NAME = "pi05_tidybench_drawer_four_skill_lora"
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,37 @@ def final_stage2_params(data_root: Path, *, exp_name: str, steps: int) -> Path:
     )
 
 
+def stage_run_dir(data_root: Path, stage: Stage) -> Path:
+    config_name = LORA_CONFIG_NAME if stage.mode == "lora" else FULL_CONFIG_NAME
+    return data_root / "checkpoints" / "openpi-runs" / config_name / stage.name
+
+
+def final_checkpoint(data_root: Path, stage: Stage) -> Path:
+    return stage_run_dir(data_root, stage) / str(stage.steps - 1)
+
+
+def checkpoint_complete(path: Path) -> bool:
+    return all(
+        required.is_file()
+        for required in (
+            path / "_CHECKPOINT_METADATA",
+            path / "params" / "_METADATA",
+            path / "params" / "manifest.ocdbt",
+        )
+    )
+
+
+def resumable_checkpoint(run_dir: Path) -> Path | None:
+    if not run_dir.is_dir():
+        return None
+    candidates = sorted(
+        (path for path in run_dir.iterdir() if path.is_dir() and path.name.isdigit()),
+        key=lambda path: int(path.name),
+        reverse=True,
+    )
+    return next((path for path in candidates if checkpoint_complete(path)), None)
+
+
 def build_stages(args: argparse.Namespace) -> list[Stage]:
     data_root = default_data_root()
     stage1 = Stage(1, "stage1-lora", "lora", 5_000, 2.5e-5, 500, 500, args.main_dataset_repo, args.base_params)
@@ -119,7 +151,23 @@ def main() -> int:
     train_script = project_root / "scripts" / "train_drawer_pi05.py"
     runner = project_root / "scripts" / "run_openpi.sh"
     stages = build_stages(args)
+    data_root = default_data_root()
     for stage in stages:
+        run_dir = stage_run_dir(data_root, stage)
+        completed = checkpoint_complete(final_checkpoint(data_root, stage))
+        if args.resume and completed:
+            print(
+                f"stage={stage.number} status=complete action=skip "
+                f"checkpoint={final_checkpoint(data_root, stage)}",
+                flush=True,
+            )
+            continue
+        resume_from = resumable_checkpoint(run_dir) if args.resume else None
+        if args.resume and run_dir.exists() and resume_from is None:
+            raise RuntimeError(
+                f"stage {stage.number} run directory exists but contains no complete checkpoint: {run_dir}; "
+                "inspect it or restart explicitly with --overwrite"
+            )
         if not args.dry_run and not stage.init_params.is_dir():
             raise FileNotFoundError(f"stage {stage.number} init params not found: {stage.init_params}")
         command = [
@@ -147,7 +195,7 @@ def main() -> int:
             "--init-params",
             str(stage.init_params),
         ]
-        if args.resume:
+        if resume_from is not None:
             command.append("--resume")
         elif args.overwrite or args.smoke:
             command.append("--overwrite")
@@ -157,7 +205,9 @@ def main() -> int:
             command.extend(("--optimizer", "adafactor", "--fsdp-min-size-mbytes", "0"))
         print(
             f"stage={stage.number} mode={stage.mode} steps={stage.steps} "
-            f"dataset={stage.dataset_repo} init={stage.init_params}",
+            f"dataset={stage.dataset_repo} init={stage.init_params} "
+            f"action={'resume' if resume_from is not None else 'start'}"
+            + (f" resume_from={resume_from}" if resume_from is not None else ""),
             flush=True,
         )
         print("command:", " ".join(command), flush=True)

@@ -125,7 +125,11 @@ make pi05-three-stage-train \
 
 Use `TRAIN_STATE_FLAG=--resume` only for a compatible interrupted run. The
 default is `--overwrite`; experiment names are stable per stage so checkpoint
-selection and comparison remain auditable.
+selection and comparison remain auditable. Resume is evaluated independently
+for every stage: a stage with its final complete Orbax checkpoint is skipped,
+an incomplete stage resumes from its latest complete numeric checkpoint, and a
+stage that has not started is launched normally. A non-empty run directory
+without any complete checkpoint is rejected instead of being overwritten.
 
 ## Validation sequence
 
@@ -196,27 +200,32 @@ This creates
 `$VLA_TIDYBENCH_DATA/checkpoints/deploy/pi05-tidybench-final/manifest.json`
 plus a checksum-bound copy of `evaluation.json` and a same-disk `checkpoint`
 link. Export refuses failed, assisted, mixed-checkpoint, or mismatched-checkpoint
-reports. Start standard-model inference on a dedicated GPU:
+reports, and formal export requires a clean Git checkout. Verify the bundle and
+start standard-model inference on a dedicated GPU using the manifest-driven
+entry point:
+
+```bash
+DEPLOYMENT=$VLA_TIDYBENCH_DATA/checkpoints/deploy/pi05-tidybench-final
+make pi05-verify-deployment DEPLOYMENT=$DEPLOYMENT
+make pi05-deployment-serve DEPLOYMENT=$DEPLOYMENT POLICY_GPU=1
+```
+
+The verifier resolves the checkpoint link, checks required Orbax metadata,
+file count and byte count, clean-code provenance, evaluation SHA-256,
+autonomous-only status, gate result, and exact checkpoint identity before model
+construction. Policy mode and four-skill configuration are taken from the
+manifest, so a full checkpoint cannot accidentally be loaded as an expert or
+LoRA model.
+
+For a dataset-free restore/JIT/interface check before formal export, continue to
+use the direct checkpoint smoke target. `--synthetic` supplies zero images/state
+and explicit identity normalization and therefore does not validate physical
+scaling:
 
 ```bash
 make drawer-policy-smoke \
-  CHECKPOINT=$VLA_TIDYBENCH_DATA/checkpoints/deploy/pi05-tidybench-final/checkpoint \
+  CHECKPOINT=/absolute/numeric/checkpoint \
   POLICY_MODE=full POLICY_CONFIG_FLAG=--four-skill POLICY_INPUT_FLAG=--synthetic
-```
-
-`--synthetic` supplies zero images/state and explicit identity normalization to
-test restore, tokenization, JIT and the `(16, 7)` policy interface without a
-dataset. It does not validate the formal dataset's physical scaling. Omit it
-and pass `POLICY_INPUT_FLAG="--dataset /path/to/eval.hdf5"` for the final gate;
-that path requires the checkpoint's real `norm_stats.json`.
-
-After this offline checkpoint/forward-pass check succeeds, start the persistent
-policy service:
-
-```bash
-make drawer-policy-serve \
-  CHECKPOINT=$VLA_TIDYBENCH_DATA/checkpoints/deploy/pi05-tidybench-final/checkpoint \
-  POLICY_GPU=1 POLICY_MODE=full POLICY_CONFIG_FLAG=--four-skill
 ```
 
 On the Isaac Lab machine, start the camera-enabled closed loop and point it at

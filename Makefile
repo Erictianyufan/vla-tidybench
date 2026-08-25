@@ -6,7 +6,7 @@ TRAIN_STATE_FLAG ?= --overwrite
 POLICY_MODE ?= full
 POLICY_CONFIG_FLAG ?= --four-skill
 
-.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-four-skill-norm-stats drawer-train drawer-train-lora drawer-train-full drawer-four-skill-train-lora drawer-four-skill-train-full pi05-plan-data pi05-convert-data pi05-prepare-norm-stats pi05-three-stage-synthetic-smoke pi05-three-stage-smoke pi05-three-stage-train pi05-eval-suite pi05-export-final drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
+.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-four-skill-norm-stats drawer-train drawer-train-lora drawer-train-full drawer-four-skill-train-lora drawer-four-skill-train-full pi05-plan-data pi05-convert-data pi05-prepare-norm-stats pi05-three-stage-synthetic-smoke pi05-three-stage-smoke pi05-three-stage-train pi05-eval-suite pi05-export-final pi05-verify-deployment pi05-deployment-serve drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
@@ -141,6 +141,17 @@ pi05-export-final:
 	./scripts/run_openpi.sh scripts/export_pi05_checkpoint.py \
 		--checkpoint "$(CHECKPOINT)" --dataset-repo "$(DATASET_REPO)" \
 		--evaluation-report "$(EVAL_REPORT)" --mode $${EXPORT_POLICY_MODE:-full} --replace
+
+pi05-verify-deployment:
+	@test -n "$(DEPLOYMENT)" || \
+		(echo "usage: make pi05-verify-deployment DEPLOYMENT=/abs/pi05-tidybench-final" >&2; exit 2)
+	./scripts/run_openpi.sh scripts/verify_pi05_deployment.py \
+		--deployment "$(DEPLOYMENT)" $${DEPLOYMENT_VALIDATION_FLAG:-}
+
+pi05-deployment-serve: pi05-verify-deployment
+	OPENPI_CUDA_VISIBLE_DEVICES=$${POLICY_GPU:-1} ./scripts/run_openpi.sh scripts/serve_drawer_policy.py \
+		--deployment "$(DEPLOYMENT)" --port $${POLICY_PORT:-8000} \
+		$${DEPLOYMENT_SERVE_FLAG:-}
 
 pi05-eval-suite:
 	./scripts/run_pi05_eval_suite.py \

@@ -73,6 +73,12 @@ def main() -> int:
         if evaluated_checkpoint != checkpoint:
             raise ValueError(f"evaluation checkpoint {evaluated_checkpoint} does not match {checkpoint}")
 
+    project_root = Path(__file__).resolve().parents[1]
+    project_commit = git_value(project_root, "rev-parse", "HEAD")
+    project_dirty = bool(git_value(project_root, "status", "--porcelain"))
+    if evaluation is not None and project_dirty:
+        raise ValueError("formal export requires a clean project checkout")
+
     output = args.output_root.expanduser().resolve() / args.name
     output.mkdir(parents=True, exist_ok=True)
     checkpoint_link = output / "checkpoint"
@@ -98,7 +104,6 @@ def main() -> int:
             "gate_passed": True,
         }
 
-    project_root = Path(__file__).resolve().parents[1]
     file_count = sum(1 for path in checkpoint.rglob("*") if path.is_file())
     byte_count = sum(path.stat().st_size for path in checkpoint.rglob("*") if path.is_file())
     manifest = {
@@ -107,18 +112,16 @@ def main() -> int:
         "stage": args.stage,
         "dataset_repo": args.dataset_repo,
         "policy_mode": args.mode,
+        "policy_config": "drawer_four_skill",
         "checkpoint": str(checkpoint),
         "deployment_checkpoint": str(checkpoint_link),
         "file_count": file_count,
         "byte_count": byte_count,
         "created_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "project_commit": git_value(project_root, "rev-parse", "HEAD"),
-        "project_dirty": bool(git_value(project_root, "status", "--porcelain")),
+        "project_commit": project_commit,
+        "project_dirty": project_dirty,
         "evaluation": evaluation_manifest,
-        "serve_command": (
-            f"make drawer-policy-serve CHECKPOINT={checkpoint_link} "
-            f"POLICY_MODE={args.mode} POLICY_CONFIG_FLAG=--four-skill"
-        ),
+        "serve_command": f"make pi05-deployment-serve DEPLOYMENT={output}",
     }
     manifest_path = output / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
