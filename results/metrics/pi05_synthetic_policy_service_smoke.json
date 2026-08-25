@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-08-25",
+  "systems_smoke_only": true,
+  "task_performance_claim": false,
+  "project_commit": "6d54ad0a8314f3ead071f6e7fa6ac301ed2d2111",
+  "deployment": "/data/scuee_user06/vla-tidybench/checkpoints/deploy/pi05-tidybench-synthetic-smoke",
+  "checkpoint": "/data/scuee_user06/vla-tidybench/checkpoints/openpi-runs/pi05_tidybench_drawer_four_skill_full/stage3-hard-recovery-smoke/1",
+  "policy_mode": "full",
+  "normalization": "synthetic_identity",
+  "evaluation_gate_passed": false,
+  "checkpoint_restore_seconds": 4.27,
+  "actions_shape": [
+    16,
+    7
+  ],
+  "requests": [
+    {
+      "run": 1,
+      "jit_state": "cold",
+      "policy_infer_ms": 14776.801569969393,
+      "websocket_round_trip_ms": 15178.366387961432
+    },
+    {
+      "run": 2,
+      "jit_state": "warm",
+      "policy_infer_ms": 84.48762202169746,
+      "websocket_round_trip_ms": 100.01597600057721
+    }
+  ],
+  "warm_latency_gate_ms": 250.0,
+  "warm_latency_gate_passed": true
+}

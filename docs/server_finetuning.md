@@ -134,6 +134,13 @@ dataset-free identity-normalized forward check returned a finite `(16, 7)`
 action chunk in `22.86 s` on cold JIT and `86.5 ms` after warm-up. Formal data
 normalization and simulator success remain separate required gates.
 
+The manifest-driven WebSocket service was also exercised end to end on the
+same synthetic checkpoint. Checkpoint restore took `4.27 s`; the first request
+including JIT took `14,776.8 ms` inside the policy; the second request took
+`84.49 ms` inside the policy and `100.02 ms` round trip. The exact evidence is
+checked in at `results/metrics/pi05_synthetic_policy_service_smoke.json`. These
+are systems and latency measurements only, not drawer-task success metrics.
+
 After freezing an episode-level train/validation split and publishing the
 formal and hard-replay LeRobot repositories:
 
