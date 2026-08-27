@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import sys
 
@@ -15,6 +16,12 @@ assert SPEC is not None and SPEC.loader is not None
 evaluation = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = evaluation
 SPEC.loader.exec_module(evaluation)
+
+SUITE_SPEC = importlib.util.spec_from_file_location("run_pi05_eval_suite", ROOT / "scripts/run_pi05_eval_suite.py")
+assert SUITE_SPEC is not None and SUITE_SPEC.loader is not None
+evaluation_suite = importlib.util.module_from_spec(SUITE_SPEC)
+sys.modules[SUITE_SPEC.name] = evaluation_suite
+SUITE_SPEC.loader.exec_module(evaluation_suite)
 
 
 def write_rollout(
@@ -36,6 +43,8 @@ def write_rollout(
         output.attrs["policy"] = policy
         output.attrs["policy_checkpoint"] = checkpoint
         output.attrs["policy_residual_weight"] = residual_weight
+        output.attrs["initial_state_file"] = f"/data/drawer_{skill}_formal.hdf5"
+        output.attrs["initial_state_episode"] = f"demo_{seed}"
         output.create_dataset("actions", data=np.zeros((20, 7), dtype=np.float32))
         output.create_dataset("inference_ms", data=np.asarray([90.0, 110.0], dtype=np.float32))
 
@@ -98,6 +107,68 @@ def test_mixed_checkpoints_fail_the_gate(tmp_path: Path) -> None:
     assert any("expected one checkpoint" in violation for violation in report["violations"])
 
 
+def test_duplicate_contexts_fail_the_gate(tmp_path: Path) -> None:
+    first = tmp_path / "open-1.hdf5"
+    second = tmp_path / "open-2.hdf5"
+    write_rollout(first, skill="open", seed=1, success=True)
+    write_rollout(second, skill="open", seed=2, success=True)
+    with h5py.File(second, "r+") as output:
+        output.attrs["initial_state_episode"] = "demo_1"
+    report = evaluation.summarize(
+        [
+            evaluation.read_episode(first, allow_assisted=False),
+            evaluation.read_episode(second, allow_assisted=False),
+        ],
+        required_skills=("open",),
+        min_episodes_per_skill=1,
+        min_success_rate=None,
+        max_p95_infer_ms=None,
+        input_root=tmp_path,
+    )
+    assert report["gate_passed"] is False
+    assert any("duplicate held-out initial-state contexts" in violation for violation in report["violations"])
+
+
+def test_eval_suite_loads_distinct_validation_contexts(tmp_path: Path) -> None:
+    sources = []
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    for skill in evaluation_suite.SKILLS:
+        source = raw / f"drawer_{skill}_formal.hdf5"
+        with h5py.File(source, "w") as dataset:
+            dataset.attrs["format_version"] = 1
+            data = dataset.create_group("data")
+            for name in ("demo_5", "demo_12", "demo_27"):
+                data.create_group(name)
+        sources.append(
+            {
+                "file": source.name,
+                "episode_indices": [2, 0, 1],
+                "prompt": skill,
+                "role": "nominal",
+            }
+        )
+    manifest = tmp_path / "main_validation.json"
+    manifest.write_text(
+        json.dumps({"schema_version": 1, "split": "validation", "sources": sources}),
+        encoding="utf-8",
+    )
+
+    contexts = evaluation_suite.load_contexts(
+        manifest,
+        raw,
+        skills=list(evaluation_suite.SKILLS),
+        seeds=[300, 301, 302],
+    )
+
+    assert contexts[("open", 300)] == ((raw / "drawer_open_formal.hdf5").resolve(), "demo_5")
+    assert contexts[("open", 301)][1] == "demo_12"
+    assert contexts[("open", 302)][1] == "demo_27"
+    for skill in evaluation_suite.SKILLS:
+        assert len({contexts[(skill, seed)][1] for seed in (300, 301, 302)}) == 3
+        assert all(contexts[(skill, seed)][0].name == f"drawer_{skill}_formal.hdf5" for seed in (300, 301, 302))
+
+
 def test_closed_loop_records_selected_skill_and_checkpoint() -> None:
     source = (ROOT / "scripts/run_drawer_pi05_closed_loop.py").read_text(encoding="utf-8")
     assert 'parser.add_argument("--skill"' in source
@@ -106,6 +177,10 @@ def test_closed_loop_records_selected_skill_and_checkpoint() -> None:
     assert "tomato soup can" not in source
     assert 'output.attrs["skill"] = skill' in source
     assert 'output.attrs["policy_checkpoint"]' in source
+    assert 'parser.add_argument("--initial-state-file"' in source
+    assert 'parser.add_argument("--initial-state-episode")' in source
+    assert "env.reset_to(context.get_initial_state()" in source
+    assert 'output.attrs["initial_state_episode"]' in source
     assert 'output.create_dataset("inference_ms"' in source
 
 

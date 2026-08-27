@@ -4,15 +4,66 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 from pathlib import Path
 import subprocess
+
+import h5py
 
 
 SKILLS = ("open", "pick", "place", "close")
 DEFAULT_MAX_STEPS = {"open": 360, "pick": 300, "place": 420, "close": 300}
 
 
+def default_data_root() -> Path:
+    return Path(os.environ.get("VLA_TIDYBENCH_DATA", f"/data/{os.environ.get('USER', 'user')}/vla-tidybench"))
+
+
+def sorted_episode_names(data: h5py.Group) -> list[str]:
+    try:
+        return sorted(data.keys(), key=lambda name: int(name.removeprefix("demo_")))
+    except ValueError as error:
+        raise ValueError("context episodes must use demo_<integer> names") from error
+
+
+def load_contexts(
+    manifest_path: Path,
+    data_root: Path,
+    *,
+    skills: list[str],
+    seeds: list[int],
+) -> dict[tuple[str, int], tuple[Path, str]]:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if int(manifest.get("schema_version", -1)) != 1 or manifest.get("split") != "validation":
+        raise ValueError(f"expected a schema-1 validation manifest: {manifest_path}")
+    data_root = data_root.expanduser().resolve()
+    contexts: dict[tuple[str, int], tuple[Path, str]] = {}
+    for skill in skills:
+        expected_name = f"drawer_{skill}_formal.hdf5"
+        matches = [source for source in manifest.get("sources", []) if Path(str(source["file"])).name == expected_name]
+        if len(matches) != 1:
+            raise ValueError(f"{manifest_path} must contain exactly one source named {expected_name}")
+        source = matches[0]
+        indices = sorted({int(index) for index in source.get("episode_indices", [])})
+        if len(indices) < len(seeds):
+            raise ValueError(f"{expected_name} has {len(indices)} contexts, needs {len(seeds)}")
+        source_path = (data_root / str(source["file"])).resolve()
+        if not source_path.is_relative_to(data_root) or not source_path.is_file():
+            raise ValueError(f"invalid or missing context source: {source_path}")
+        with h5py.File(source_path, "r") as dataset:
+            if int(dataset.attrs.get("format_version", -1)) != 1 or "data" not in dataset:
+                raise ValueError(f"unsupported context HDF5 format: {source_path}")
+            names = sorted_episode_names(dataset["data"])
+        if any(index < 0 or index >= len(names) for index in indices):
+            raise ValueError(f"{expected_name} contains an out-of-range episode index")
+        for seed, index in zip(seeds, indices, strict=False):
+            contexts[(skill, seed)] = (source_path, names[index])
+    return contexts
+
+
 def main() -> int:
+    data_root = default_data_root()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--host", default="127.0.0.1")
@@ -20,6 +71,13 @@ def main() -> int:
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--skills", nargs="+", choices=SKILLS, default=list(SKILLS))
     parser.add_argument("--seeds", nargs="+", type=int, default=[300, 301, 302, 303, 304])
+    parser.add_argument(
+        "--context-manifest",
+        type=Path,
+        default=data_root / "manifests" / "pi05-formal" / "main_validation.json",
+        help="frozen validation manifest whose episode initial states define the evaluation contexts",
+    )
+    parser.add_argument("--data-root", type=Path, default=data_root / "raw")
     parser.add_argument("--execute-steps", type=int, default=4)
     parser.add_argument("--max-steps", type=int, help="override the skill-specific limits")
     parser.add_argument("--min-success-rate", type=float, default=0.6)
@@ -30,6 +88,8 @@ def main() -> int:
     args = parser.parse_args()
     if not args.seeds or len(set(args.seeds)) != len(args.seeds):
         parser.error("--seeds must be a non-empty unique list")
+    if len(set(args.skills)) != len(args.skills):
+        parser.error("--skills must not contain duplicates")
     if args.execute_steps < 1 or (args.max_steps is not None and args.max_steps < 1):
         parser.error("step counts must be positive")
 
@@ -38,6 +98,15 @@ def main() -> int:
     rollout_script = project_root / "scripts" / "run_drawer_pi05_closed_loop.py"
     output_root = args.output_root.expanduser().resolve()
     infrastructure_failures: list[str] = []
+    try:
+        contexts = load_contexts(
+            args.context_manifest.expanduser().resolve(),
+            args.data_root,
+            skills=args.skills,
+            seeds=args.seeds,
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        parser.error(str(error))
 
     for skill in args.skills:
         for seed in args.seeds:
@@ -55,6 +124,10 @@ def main() -> int:
                 str(args.port),
                 "--seed",
                 str(seed),
+                "--initial-state-file",
+                str(contexts[(skill, seed)][0]),
+                "--initial-state-episode",
+                contexts[(skill, seed)][1],
                 "--max-steps",
                 str(args.max_steps or DEFAULT_MAX_STEPS[skill]),
                 "--execute-steps",

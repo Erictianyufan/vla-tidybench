@@ -23,6 +23,8 @@ parser.add_argument("--max-steps", type=int, default=360)
 parser.add_argument("--execute-steps", type=int, default=4)
 parser.add_argument("--seed", type=int, default=2026)
 parser.add_argument("--output", type=Path, required=True)
+parser.add_argument("--initial-state-file", type=Path)
+parser.add_argument("--initial-state-episode")
 parser.add_argument("--showcase", action="store_true", help="add room, props, and 720p hero camera")
 parser.add_argument("--teacher-preview", action="store_true", help="use the scripted OPEN teacher for camera QA")
 parser.add_argument(
@@ -53,6 +55,10 @@ skill_prompts = {
     "close": "close the top drawer",
 }
 args_cli.prompt = args_cli.prompt or skill_prompts[skill]
+if (args_cli.initial_state_file is None) != (args_cli.initial_state_episode is None):
+    parser.error("--initial-state-file and --initial-state-episode must be provided together")
+if args_cli.initial_state_file is not None and not args_cli.initial_state_file.is_file():
+    parser.error(f"initial-state dataset not found: {args_cli.initial_state_file}")
 if args_cli.dls_contact_recovery and args_cli.teacher_preview:
     parser.error("--dls-contact-recovery and --teacher-preview are mutually exclusive")
 if args_cli.dls_contact_recovery and skill != "open":
@@ -66,6 +72,7 @@ import gymnasium as gym  # noqa: E402
 import h5py  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
+from isaaclab.utils.datasets import HDF5DatasetFileHandler  # noqa: E402
 from vla_tidybench.isaac import TidyBenchDrawerEnvCfg, TidyBenchDrawerShowcaseEnvCfg  # noqa: E402
 from vla_tidybench.policy_bridge.action_adapter import ActionAdapter  # noqa: E402
 from vla_tidybench.policy_bridge.safety_guard import SafetyGuard  # noqa: E402
@@ -114,6 +121,22 @@ def main() -> int:
     success = False
     try:
         env.reset(seed=args_cli.seed)
+        if args_cli.initial_state_file is not None:
+            context_handler = HDF5DatasetFileHandler()
+            context_handler.open(str(args_cli.initial_state_file.resolve()))
+            try:
+                names = set(context_handler.get_episode_names())
+                if args_cli.initial_state_episode not in names:
+                    raise ValueError(
+                        f"initial-state episode {args_cli.initial_state_episode!r} not found in "
+                        f"{args_cli.initial_state_file}"
+                    )
+                context = context_handler.load_episode(args_cli.initial_state_episode, env.device)
+                env.reset_to(context.get_initial_state(), torch.tensor([0], device=env.device), is_relative=True)
+                for _ in range(cfg.num_rerenders_on_reset):
+                    env.sim.render()
+            finally:
+                context_handler.close()
         if args_cli.showcase:
             # Explicit look-at avoids reusing a near-camera quaternion after
             # translating the hero camera. Target sits between the complete
@@ -239,6 +262,10 @@ def main() -> int:
             output.attrs["prompt"] = args_cli.prompt
             output.attrs["skill"] = skill
             output.attrs["seed"] = args_cli.seed
+            output.attrs["initial_state_file"] = (
+                str(args_cli.initial_state_file.resolve()) if args_cli.initial_state_file is not None else ""
+            )
+            output.attrs["initial_state_episode"] = args_cli.initial_state_episode or ""
             output.attrs["execute_steps"] = args_cli.execute_steps
             output.attrs["max_steps"] = args_cli.max_steps
             output.attrs["success"] = success

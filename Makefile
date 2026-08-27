@@ -182,6 +182,8 @@ pi05-policy-probe:
 pi05-eval-suite:
 	./scripts/run_pi05_eval_suite.py \
 		--output-root $${EVAL_ROOT:-$(VLA_TIDYBENCH_DATA)/eval/pi05-formal} \
+		--context-manifest $${EVAL_CONTEXT_MANIFEST:-$(VLA_TIDYBENCH_DATA)/manifests/pi05-formal/main_validation.json} \
+		--data-root $${EVAL_DATA_ROOT:-$(VLA_TIDYBENCH_DATA)/raw} \
 		--host $${POLICY_HOST:-127.0.0.1} --port $${POLICY_PORT:-8000} \
 		--min-success-rate $${MIN_SUCCESS_RATE:-0.6} \
 		--max-p95-infer-ms $${MAX_P95_INFER_MS:-250} $${EVAL_STATE_FLAG:---overwrite}

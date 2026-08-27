@@ -26,6 +26,7 @@ class Episode:
     policy: str
     checkpoint: str
     residual_weight: float
+    context: str
     inference_ms: np.ndarray
 
 
@@ -43,11 +44,16 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
         policy = _text(source.attrs.get("policy", ""))
         checkpoint = _text(source.attrs.get("policy_checkpoint", ""))
         residual_weight = float(source.attrs.get("policy_residual_weight", 0.0))
+        context_file = _text(source.attrs.get("initial_state_file", ""))
+        context_episode = _text(source.attrs.get("initial_state_episode", ""))
+        context = f"{Path(context_file).name}::{context_episode}" if context_file and context_episode else ""
         assisted = residual_weight != 0.0 or "teacher" in policy.lower() or "+dls" in policy.lower()
         if assisted and not allow_assisted:
             raise ValueError(f"assisted rollout is not valid for autonomous policy evaluation: {path}")
         if not assisted and not checkpoint:
             raise ValueError(f"autonomous rollout does not identify its checkpoint: {path}")
+        if not assisted and not context:
+            raise ValueError(f"autonomous rollout does not identify its held-out initial-state context: {path}")
         if "actions" not in source or "inference_ms" not in source:
             raise ValueError(f"missing actions/inference_ms in {path}")
         inference_ms = np.asarray(source["inference_ms"], dtype=np.float64)
@@ -64,6 +70,7 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
             policy=policy,
             checkpoint=checkpoint,
             residual_weight=residual_weight,
+            context=context,
             inference_ms=inference_ms,
         )
 
@@ -91,6 +98,10 @@ def summarize(
         selected = [episode for episode in episodes if episode.skill == skill]
         if len(selected) < min_episodes_per_skill:
             violations.append(f"{skill}: {len(selected)} episodes < required {min_episodes_per_skill}")
+        if len({episode.seed for episode in selected}) != len(selected):
+            violations.append(f"{skill}: duplicate evaluation seeds")
+        if len({episode.context for episode in selected}) != len(selected):
+            violations.append(f"{skill}: duplicate held-out initial-state contexts")
         successes = sum(episode.success for episode in selected)
         success_rate = successes / len(selected) if selected else 0.0
         if min_success_rate is not None and success_rate < min_success_rate:
@@ -141,6 +152,7 @@ def summarize(
                 "bytes": episode.path.stat().st_size,
                 "skill": episode.skill,
                 "seed": episode.seed,
+                "context": episode.context,
                 "success": episode.success,
                 "steps": episode.steps,
                 "mean_infer_ms": float(np.mean(episode.inference_ms)) if episode.inference_ms.size else None,

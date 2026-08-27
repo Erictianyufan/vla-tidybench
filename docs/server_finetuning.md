@@ -208,13 +208,31 @@ make drawer-policy-serve \
 pi05_tidybench_drawer_four_skill_full/stage3-hard-recovery/2999 \
   POLICY_GPU=1 POLICY_MODE=full POLICY_CONFIG_FLAG=--four-skill
 
-# Isaac Lab machine: 5 locked seeds per skill, no teacher/DLS residual
+# Isaac Lab machine: copy raw nominal HDF5 plus main_validation.json first.
+# The suite uses 5 locked, distinct held-out contexts per skill and no
+# teacher/DLS residual.
 make pi05-eval-suite POLICY_HOST=<training-server-ip> POLICY_PORT=8000
 ```
 
 The default engineering acceptance gate requires all four skills, five unique
-seeds per skill, at least `60%` autonomous success for every skill, one exact
-checkpoint across all rollouts, and overall P95 policy latency at most `250 ms`.
+seeds and five distinct held-out initial-state contexts per skill, at least
+`60%` autonomous success for every skill, one exact checkpoint across all
+rollouts, and overall P95 policy latency at most `250 ms`.
+`main_validation.json` selects the contexts from the raw nominal HDF5 files.
+Only each held-out episode's initial simulator state is restored: validation
+actions are never replayed and are never supplied to the policy. The raw files
+and manifest must therefore be available on the Isaac Lab machine at
+`$VLA_TIDYBENCH_DATA/raw` and
+`$VLA_TIDYBENCH_DATA/manifests/pi05-formal/main_validation.json`. Override
+those locations explicitly when needed:
+
+```bash
+make pi05-eval-suite \
+  POLICY_HOST=<training-server-ip> POLICY_PORT=8000 \
+  EVAL_CONTEXT_MANIFEST=/absolute/path/main_validation.json \
+  EVAL_DATA_ROOT=/absolute/path/raw
+```
+
 Override `MIN_SUCCESS_RATE` or `MAX_P95_INFER_MS` only when documenting a
 different acceptance profile. The report is written to
 `$VLA_TIDYBENCH_DATA/eval/pi05-formal/evaluation.json`.
