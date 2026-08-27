@@ -32,6 +32,12 @@ make sim-camera-smoke
 make protocol-smoke
 ```
 
+`make doctor` is also the formal evaluation-host admission gate. It requires a
+clean project checkout, the pinned Isaac packages/vendor commit, usable NVIDIA
+devices, all 40 held-out contexts with matching content hashes, and the
+evaluation runtime scripts. A failure here means the machine is not an eligible
+source of the final `evaluation.json`.
+
 ## Model download
 
 The pi0.5-DROID checkpoint is a model-runtime smoke-test baseline, not the final
@@ -48,12 +54,20 @@ and fine-tuned checkpoint.
 
 ## Formal checkpoint identity
 
-Production exports use deployment manifest format 2. Its
-`sha256-tree-v1` digest covers every checkpoint relative path, file size and
-file byte. The same digest is advertised by the policy server, copied into each
-closed-loop rollout and evaluation report, checked during export, and verified
-again before serving the deployment. File count and total bytes remain useful
-diagnostics but are not treated as cryptographic identity.
+Production exports use deployment manifest format 3. Its `sha256-tree-v1`
+digest covers every checkpoint relative path, file size and file byte. The same
+digest is advertised by the policy server, copied into each closed-loop rollout
+and evaluation report, checked during export, and verified again before serving
+the deployment. File count and total bytes remain useful diagnostics but are not
+treated as cryptographic identity.
+
+Format 3 additionally embeds a checksum-bound `training_completion.json`. It
+binds the final numeric checkpoint to the terminal loss/gradient/parameter norm,
+dataset and normalization asset, clean training-project commit, OpenPI source
+tree fingerprint, initialization-parameter fingerprint, and checkpoint content
+digest. A formal deployment is rejected if this training proof, the autonomous
+evaluation report, or the copied checkpoint disagrees with either of the other
+two artifacts.
 
 Formal exports copy the checkpoint into the deployment bundle by default, so
 the directory can be transferred to an Isaac host without retaining the source

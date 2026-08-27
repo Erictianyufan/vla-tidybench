@@ -2,6 +2,13 @@
 
 Audit date: 2026-08-13 (Asia/Shanghai)
 
+> Historical host profile: this section records the previously validated cloud
+> Isaac host. A 2026-08-28 probe found no NVIDIA runtime on the current Windows
+> workstation and no `isaaclab`/`omni` installation on the training server
+> `202.115.53.61`. Formal evaluation therefore still requires reconnecting this
+> host or provisioning an equivalent Isaac Lab machine; it must not be reported
+> as executed on the training server.
+
 ## Hardware
 
 - Host: cloud instance identifier omitted from the repository
