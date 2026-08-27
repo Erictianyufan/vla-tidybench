@@ -11,6 +11,7 @@ from pathlib import Path
 
 from vla_tidybench.openpi.drawer_config import make_config as make_open_config
 from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
+from vla_tidybench.openpi.training_metrics import JsonlTrainingMetrics
 
 
 def openpi_train_script() -> Path:
@@ -95,6 +96,34 @@ def main() -> int:
         overwrite=args.overwrite,
         resume=args.resume,
     )
+    metrics_path = Path(
+        os.environ.get("PI05_TRAIN_METRICS_PATH", Path(str(config.checkpoint_dir)) / "train_metrics.jsonl")
+    )
+    metric_logger = None
+    metric_metadata = {
+        "config": config.name,
+        "experiment": config.exp_name,
+        "mode": args.mode,
+        "optimizer": args.optimizer or ("adafactor" if args.mode == "full" else "adamw"),
+        "dataset_repo": getattr(config.data, "repo_id", "fake"),
+        "init_params": str(args.init_params.resolve()) if args.init_params else None,
+        "num_train_steps": config.num_train_steps,
+        "batch_size": config.batch_size,
+        "fsdp_devices": config.fsdp_devices,
+    }
+    original_wandb_log = official.wandb.log
+
+    def log_locally(payload, *positional, **keywords):
+        nonlocal metric_logger
+        if metric_logger is None:
+            # OpenPI creates, resumes, or wipes checkpoint_dir before its first
+            # wandb.log call, so lazy construction observes the final run state.
+            metric_logger = JsonlTrainingMetrics(metrics_path, metric_metadata)
+        step = keywords.get("step", positional[0] if positional else None)
+        metric_logger.log(payload, step=step)
+        return original_wandb_log(payload, *positional, **keywords)
+
+    official.wandb.log = log_locally
     official.main(config)
     return 0
 

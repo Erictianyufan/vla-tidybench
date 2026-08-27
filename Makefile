@@ -9,7 +9,7 @@ PI05_MAIN_CONFIG ?= configs/data/drawer_four_skill_formal.json
 PI05_HARD_CONFIG ?= configs/data/drawer_four_skill_hard_recovery.json
 PI05_REPO_PREFIX ?= $(USER)/vla_tidybench_drawer_v1
 
-.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-four-skill-norm-stats drawer-train drawer-train-lora drawer-train-full drawer-four-skill-train-lora drawer-four-skill-train-full pi05-plan-data pi05-convert-data pi05-prepare-norm-stats pi05-formal-prepare pi05-formal-pipeline pi05-three-stage-synthetic-smoke pi05-three-stage-smoke pi05-three-stage-train pi05-eval-suite pi05-export-final pi05-verify-deployment pi05-deployment-serve pi05-policy-probe drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
+.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-four-skill-norm-stats drawer-train drawer-train-lora drawer-train-full drawer-four-skill-train-lora drawer-four-skill-train-full pi05-plan-data pi05-convert-data pi05-prepare-norm-stats pi05-formal-prepare pi05-formal-pipeline pi05-three-stage-synthetic-smoke pi05-three-stage-smoke pi05-three-stage-train pi05-training-summary pi05-eval-suite pi05-export-final pi05-verify-deployment pi05-deployment-serve pi05-policy-probe drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
@@ -154,6 +154,11 @@ pi05-three-stage-train:
 	./scripts/run_openpi.sh scripts/run_pi05_three_stage.py --stage all \
 		--main-dataset-repo "$(MAIN_DATASET_REPO)" --hard-dataset-repo "$(HARD_DATASET_REPO)" \
 		--batch-size $${BATCH_SIZE:-3} --fsdp-devices $${FSDP_DEVICES:-3} $(TRAIN_STATE_FLAG)
+
+pi05-training-summary:
+	./scripts/run_openpi.sh scripts/summarize_pi05_training.py \
+		--output $${TRAIN_METRICS_REPORT:-$(VLA_TIDYBENCH_DATA)/logs/pi05-three-stage-metrics-summary.json} \
+		$${TRAIN_METRICS_FLAG:-}
 
 pi05-export-final:
 	@test -n "$(CHECKPOINT)" -a -n "$(DATASET_REPO)" -a -n "$(EVAL_REPORT)" || \

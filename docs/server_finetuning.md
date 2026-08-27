@@ -164,6 +164,24 @@ an incomplete stage resumes from its latest complete numeric checkpoint, and a
 stage that has not started is launched normally. A non-empty run directory
 without any complete checkpoint is rejected instead of being overwritten.
 
+Each newly launched training subprocess also writes append-only numeric metrics
+to `train_metrics.jsonl` beside its checkpoints. Every record contains loss,
+gradient norm, parameter norm, the dataset/config identity, and a unique process
+session ID. A resumed process may replay steps after its last durable
+checkpoint; the raw history is retained, while the summary uses the newest
+record for each repeated step. Generate the auditable three-stage summary with:
+
+```bash
+make pi05-training-summary
+```
+
+The default report is
+`$VLA_TIDYBENCH_DATA/logs/pi05-three-stage-metrics-summary.json`. Add
+`TRAIN_METRICS_FLAG=--require-final-step` when the command must fail unless all
+three final steps (`4999`, `9999`, and `2999`) are present. The metric file is
+local and independent of WandB, so disabling external experiment tracking does
+not discard the optimization trace.
+
 ## Validation sequence
 
 Compute separate normalization statistics after the final episode-level splits

@@ -34,3 +34,11 @@ def test_checkpoint_completion_requires_orbax_metadata(tmp_path: Path) -> None:
     assert runner.checkpoint_complete(checkpoint) is False
     (checkpoint / "params" / "manifest.ocdbt").touch()
     assert runner.checkpoint_complete(checkpoint) is True
+
+
+def test_train_wrapper_installs_local_metric_logging() -> None:
+    source = (ROOT / "scripts" / "train_drawer_pi05.py").read_text(encoding="utf-8")
+    assert "JsonlTrainingMetrics" in source
+    assert '"train_metrics.jsonl"' in source
+    assert '"num_train_steps": config.num_train_steps' in source
+    assert "official.wandb.log = log_locally" in source
