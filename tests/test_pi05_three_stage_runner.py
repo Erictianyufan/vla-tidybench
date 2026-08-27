@@ -102,3 +102,9 @@ def test_train_wrapper_installs_local_metric_logging() -> None:
     assert '"num_train_steps": config.num_train_steps' in source
     assert "official.wandb.log = log_locally" in source
     assert "validate_completed_training_run(" in source
+    assert source.index("checkpoint_fingerprint(dataset_path)") < source.index(
+        "wait_for_exclusive_gpus("
+    )
+    assert source.index("wait_for_exclusive_gpus(") < source.index(
+        "from vla_tidybench.openpi.drawer_config import"
+    )

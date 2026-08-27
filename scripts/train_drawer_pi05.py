@@ -25,6 +25,9 @@ from vla_tidybench.openpi.training_metrics import (
     write_training_completion,
 )
 
+DEFAULT_DRAWER_DATASET_REPO = "erictianyufan/vla_tidybench_drawer_m2_smoke"
+DEFAULT_FOUR_SKILL_DATASET_REPO = "erictianyufan/vla_tidybench_drawer_four_skill_mvp"
+
 
 def openpi_train_script() -> Path:
     project_root = Path(__file__).resolve().parents[1]
@@ -73,23 +76,14 @@ def main() -> int:
     max_used_mib = int(os.environ.get("PI05_GPU_PREFLIGHT_MAX_USED_MIB", "512"))
     timeout_s = float(os.environ.get("PI05_GPU_PREFLIGHT_TIMEOUT_S", "21600"))
     selected_gpus = selected_gpu_indices()
-    if os.environ.get("PI05_SKIP_GPU_PREFLIGHT") != "1":
-        wait_for_exclusive_gpus(
-            selected_gpus,
-            max_used_mib=max_used_mib,
-            timeout_s=timeout_s,
-        )
 
-    from vla_tidybench.openpi.drawer_config import make_config as make_open_config
-    from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
-
+    dataset_env_name = (
+        "VLA_TIDYBENCH_DRAWER_FOUR_SKILL_REPO_ID"
+        if args.four_skill
+        else "VLA_TIDYBENCH_DRAWER_REPO_ID"
+    )
     if args.dataset_repo:
-        env_name = (
-            "VLA_TIDYBENCH_DRAWER_FOUR_SKILL_REPO_ID"
-            if args.four_skill
-            else "VLA_TIDYBENCH_DRAWER_REPO_ID"
-        )
-        os.environ[env_name] = args.dataset_repo
+        os.environ[dataset_env_name] = args.dataset_repo
     if args.init_params:
         if not args.init_params.is_dir():
             parser.error(f"initial parameter directory does not exist: {args.init_params}")
@@ -104,6 +98,31 @@ def main() -> int:
         init_params_files, init_params_sha256 = source_tree_fingerprint(
             args.init_params, (Path("."),)
         )
+    dataset_repo = (
+        "fake"
+        if args.synthetic_data
+        else args.dataset_repo
+        or os.environ.get(dataset_env_name)
+        or (DEFAULT_FOUR_SKILL_DATASET_REPO if args.four_skill else DEFAULT_DRAWER_DATASET_REPO)
+    )
+    dataset_path = None
+    dataset_files = None
+    dataset_bytes = None
+    dataset_sha256 = None
+    if dataset_repo != "fake":
+        dataset_path = lerobot_dataset_path(dataset_repo)
+        dataset_files, dataset_bytes, dataset_sha256 = checkpoint_fingerprint(dataset_path)
+
+    if os.environ.get("PI05_SKIP_GPU_PREFLIGHT") != "1":
+        wait_for_exclusive_gpus(
+            selected_gpus,
+            max_used_mib=max_used_mib,
+            timeout_s=timeout_s,
+        )
+
+    from vla_tidybench.openpi.drawer_config import make_config as make_open_config
+    from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
+
     spec = importlib.util.spec_from_file_location("openpi_train", train_script)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {train_script}")
@@ -129,14 +148,12 @@ def main() -> int:
         overwrite=args.overwrite,
         resume=args.resume,
     )
-    dataset_repo = str(getattr(config.data, "repo_id", "fake"))
-    dataset_path = None
-    dataset_files = None
-    dataset_bytes = None
-    dataset_sha256 = None
-    if dataset_repo != "fake":
-        dataset_path = lerobot_dataset_path(dataset_repo)
-        dataset_files, dataset_bytes, dataset_sha256 = checkpoint_fingerprint(dataset_path)
+    configured_dataset_repo = str(getattr(config.data, "repo_id", "fake"))
+    if configured_dataset_repo != dataset_repo:
+        raise ValueError(
+            f"configured dataset {configured_dataset_repo!r} differs from fingerprinted "
+            f"dataset {dataset_repo!r}"
+        )
     metrics_path = Path(
         os.environ.get("PI05_TRAIN_METRICS_PATH", Path(str(config.checkpoint_dir)) / "train_metrics.jsonl")
     )
