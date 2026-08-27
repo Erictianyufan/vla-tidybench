@@ -4,13 +4,13 @@
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict
-from dataclasses import dataclass
 import hashlib
 import json
 import math
-from pathlib import Path
 import random
+from collections import defaultdict
+from dataclasses import dataclass
+from pathlib import Path
 
 import h5py
 
@@ -92,7 +92,17 @@ def load_source_config(config_path: Path, data_root: Path, *, role: str) -> tupl
                 if key in seen:
                     raise ValueError(f"duplicate episode in {role} config: {path}::{name}")
                 seen.add(key)
-                episodes.append(Episode(source_file, path, index, name, prompt, inspect_episode(path, dataset["data"], name), role))
+                episodes.append(
+                    Episode(
+                        source_file,
+                        path,
+                        index,
+                        name,
+                        prompt,
+                        inspect_episode(path, dataset["data"], name),
+                        role,
+                    )
+                )
     if not episodes:
         raise ValueError(f"no episodes selected by {config_path}")
     return config, episodes
@@ -278,7 +288,9 @@ def main() -> int:
         "hard_validation": count_by_prompt(hard_validation),
         "hard_mix_train": count_by_prompt(mixed),
         "leakage": {
-            "train_validation_overlap": len({episode.key for episode in train} & {episode.key for episode in validation}),
+            "train_validation_overlap": len(
+                {episode.key for episode in train} & {episode.key for episode in validation}
+            ),
             "hard_train_validation_overlap": len(
                 {episode.key for episode in hard_train} & {episode.key for episode in hard_validation}
             ),

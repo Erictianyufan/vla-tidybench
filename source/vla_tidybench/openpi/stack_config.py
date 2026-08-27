@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
-from flax import nnx
 import optax
+from flax import nnx
 from openpi.models import pi0_config
+from openpi.shared import nnx_utils
 from openpi.training import config as training_config
 from openpi.training import optimizer as training_optimizer
 from openpi.training import weight_loaders
-from openpi.shared import nnx_utils
 
 CONFIG_NAMES = {
     "lora": "pi05_tidybench_stack_lora",

@@ -29,6 +29,7 @@ class Episode:
     steps: int
     policy: str
     checkpoint: str
+    checkpoint_sha256: str
     residual_weight: float
     context: str
     success_predicate: str
@@ -55,6 +56,7 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
             raise ValueError(f"invalid or missing skill in {path}: {skill!r}")
         policy = _text(source.attrs.get("policy", ""))
         checkpoint = _text(source.attrs.get("policy_checkpoint", ""))
+        checkpoint_sha256 = _text(source.attrs.get("policy_checkpoint_sha256", ""))
         residual_weight = float(source.attrs.get("policy_residual_weight", 0.0))
         context_file = _text(source.attrs.get("initial_state_file", ""))
         context_episode = _text(source.attrs.get("initial_state_episode", ""))
@@ -67,6 +69,11 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
             raise ValueError(f"assisted rollout is not valid for autonomous policy evaluation: {path}")
         if not assisted and not checkpoint:
             raise ValueError(f"autonomous rollout does not identify its checkpoint: {path}")
+        invalid_digest = len(checkpoint_sha256) != 64 or any(
+            char not in "0123456789abcdef" for char in checkpoint_sha256
+        )
+        if not assisted and invalid_digest:
+            raise ValueError(f"autonomous rollout has no valid checkpoint SHA-256: {path}")
         if not assisted and not context:
             raise ValueError(f"autonomous rollout does not identify its held-out initial-state context: {path}")
         if not assisted and success_predicate != SUCCESS_PREDICATE_VERSION:
@@ -117,6 +124,7 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
             steps=int(source["actions"].shape[0]),
             policy=policy,
             checkpoint=checkpoint,
+            checkpoint_sha256=checkpoint_sha256,
             residual_weight=residual_weight,
             context=context,
             success_predicate=success_predicate,
@@ -137,10 +145,13 @@ def summarize(
     violations: list[str] = []
     policies = sorted({episode.policy for episode in episodes})
     checkpoints = sorted({episode.checkpoint for episode in episodes if episode.checkpoint})
+    checkpoint_digests = sorted({episode.checkpoint_sha256 for episode in episodes if episode.checkpoint_sha256})
     if len(policies) != 1:
         violations.append(f"expected one policy, found {policies}")
     if len(checkpoints) != 1:
         violations.append(f"expected one checkpoint, found {checkpoints}")
+    if len(checkpoint_digests) != 1:
+        violations.append(f"expected one checkpoint SHA-256, found {checkpoint_digests}")
 
     per_skill: dict[str, object] = {}
     all_timings: list[np.ndarray] = []
@@ -182,6 +193,7 @@ def summarize(
         "autonomous_only": all(episode.residual_weight == 0.0 for episode in used),
         "policy": policies[0] if len(policies) == 1 else None,
         "checkpoint": checkpoints[0] if len(checkpoints) == 1 else None,
+        "checkpoint_sha256": checkpoint_digests[0] if len(checkpoint_digests) == 1 else None,
         "required_skills": list(required_skills),
         "episode_count": len(used),
         "successes": sum(episode.success for episode in used),
@@ -204,6 +216,7 @@ def summarize(
                 "seed": episode.seed,
                 "context": episode.context,
                 "success_predicate": episode.success_predicate,
+                "checkpoint_sha256": episode.checkpoint_sha256,
                 "success_hold_steps": episode.success_hold_steps,
                 "success": episode.success,
                 "steps": episode.steps,

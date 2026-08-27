@@ -4,11 +4,10 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, replace
 import os
-from pathlib import Path
 import subprocess
-
+from dataclasses import dataclass, replace
+from pathlib import Path
 
 MVP_REPO = "erictianyufan/vla_tidybench_drawer_four_skill_mvp"
 FULL_CONFIG_NAME = "pi05_tidybench_drawer_four_skill_full"

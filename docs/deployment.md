@@ -46,6 +46,15 @@ tail -f /home/ubuntu/data/vla-tidybench/logs/pi05_droid_download.log
 The final project policy will use a dedicated Franka data transform, norm stats
 and fine-tuned checkpoint.
 
+## Formal checkpoint identity
+
+Production exports use deployment manifest format 2. Its
+`sha256-tree-v1` digest covers every checkpoint relative path, file size and
+file byte. The same digest is advertised by the policy server, copied into each
+closed-loop rollout and evaluation report, checked during export, and verified
+again before serving the deployment. File count and total bytes remain useful
+diagnostics but are not treated as cryptographic identity.
+
 ## Known vendor-image constraints
 
 - `isaaclab.sh` fails if `/home/ubuntu/env_isaaclab` is not activated first.

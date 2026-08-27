@@ -244,8 +244,11 @@ bottle and gripper state, and the summarizer rejects older or missing predicate
 versions, recomputes terminal success from those states, and rejects a forged or
 inconsistent `success` label instead of silently mixing incomparable results.
 
-Override `MIN_SUCCESS_RATE` or `MAX_P95_INFER_MS` only when documenting a
-different acceptance profile. The report is written to
+Override `MIN_SUCCESS_RATE` or `MAX_P95_INFER_MS` only when documenting an
+exploratory acceptance profile. Formal export accepts the locked profile or a
+strictly stronger one; it refuses fewer than five episodes per skill, success
+thresholds below `60%`, latency thresholds above `250 ms`, incomplete episode
+evidence, or internally inconsistent counts. The report is written to
 `$VLA_TIDYBENCH_DATA/eval/pi05-formal/evaluation.json`.
 
 Publish the evaluated numeric checkpoint step as a stable deployment bundle:
@@ -261,10 +264,14 @@ pi05_tidybench_drawer_four_skill_full/stage3-hard-recovery/2999 \
 This creates
 `$VLA_TIDYBENCH_DATA/checkpoints/deploy/pi05-tidybench-final/manifest.json`
 plus a checksum-bound copy of `evaluation.json` and a same-disk `checkpoint`
-link. Export refuses failed, assisted, mixed-checkpoint, or mismatched-checkpoint
-reports, and formal export requires a clean Git checkout. Verify the bundle and
-start standard-model inference on a dedicated GPU using the manifest-driven
-entry point:
+link. The format-2 manifest stores a deterministic SHA-256 over every relative
+checkpoint path, file size and file byte. The policy service publishes that
+digest into every rollout, the evaluation report requires one exact digest,
+and export refuses a report whose evaluated digest differs from the checkpoint
+being packaged. It also refuses failed, assisted, mixed-checkpoint, or
+mismatched-checkpoint reports, and formal export requires a clean Git checkout.
+Verify the bundle and start standard-model inference on a dedicated GPU using
+the manifest-driven entry point:
 
 ```bash
 DEPLOYMENT=$VLA_TIDYBENCH_DATA/checkpoints/deploy/pi05-tidybench-final
@@ -281,11 +288,12 @@ POLICY_PROBE_FLAG="--expect-deployment $DEPLOYMENT --require-evaluation --max-la
 ```
 
 The verifier resolves the checkpoint link, checks required Orbax metadata,
-file count and byte count, clean-code provenance, evaluation SHA-256,
-autonomous-only status, gate result, and exact checkpoint identity before model
-construction. Policy mode and four-skill configuration are taken from the
-manifest, so a full checkpoint cannot accidentally be loaded as an expert or
-LoRA model.
+file count, byte count, the complete checkpoint tree SHA-256, clean-code
+provenance, evaluation SHA-256, autonomous-only status, gate result, and exact
+evaluated checkpoint identity before model construction. Hashing the final
+12-GB-class checkpoint can take roughly one to two minutes on a mechanical
+disk. Policy mode and four-skill configuration are taken from the manifest, so
+a full checkpoint cannot accidentally be loaded as an expert or LoRA model.
 
 For a dataset-free restore/JIT/interface check before formal export, continue to
 use the direct checkpoint smoke target. `--synthetic` supplies zero images/state

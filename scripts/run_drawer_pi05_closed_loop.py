@@ -276,6 +276,7 @@ def main() -> int:
                 policy_name = str(policy_metadata.get("policy", "pi0.5-drawer"))
             output.attrs["policy"] = policy_name
             output.attrs["policy_checkpoint"] = str(policy_metadata.get("checkpoint", ""))
+            output.attrs["policy_checkpoint_sha256"] = str(policy_metadata.get("checkpoint_sha256", ""))
             output.attrs["prompt"] = args_cli.prompt
             output.attrs["skill"] = skill
             output.attrs["seed"] = args_cli.seed

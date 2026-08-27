@@ -9,15 +9,14 @@ import concurrent.futures
 import hashlib
 import json
 import os
-from pathlib import Path, PurePosixPath
 import shlex
 import subprocess
 import threading
 import time
+from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
 import requests
-
 
 CHUNK_SIZE = 16 * 1024 * 1024
 

@@ -6,11 +6,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import h5py
-
 
 SKILLS = ("open", "pick", "place", "close")
 DEFAULT_MAX_STEPS = {"open": 360, "pick": 300, "place": 420, "close": 300}

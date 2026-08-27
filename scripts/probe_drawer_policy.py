@@ -5,11 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import time
+from pathlib import Path
 
 import numpy as np
-
 from vla_tidybench.policy_bridge.websocket_client import PolicyClient
 
 
@@ -43,6 +42,9 @@ def main() -> int:
         expected_policy = f"pi0.5-drawer-{args.expect_mode}"
         if metadata.get("policy") != expected_policy:
             raise ValueError(f"expected policy {expected_policy!r}, got {metadata.get('policy')!r}")
+        checkpoint_sha256 = str(metadata.get("checkpoint_sha256", ""))
+        if len(checkpoint_sha256) != 64 or any(char not in "0123456789abcdef" for char in checkpoint_sha256):
+            raise ValueError("policy service has no valid checkpoint SHA-256")
         if args.expect_deployment is not None:
             expected = str(args.expect_deployment.expanduser().resolve())
             if metadata.get("deployment") != expected:
@@ -74,6 +76,7 @@ def main() -> int:
                 "port": args.port,
                 "policy": expected_policy,
                 "checkpoint": metadata.get("checkpoint"),
+                "checkpoint_sha256": checkpoint_sha256,
                 "deployment": metadata.get("deployment"),
                 "evaluation_gate_passed": bool(metadata.get("evaluation_gate_passed", False)),
                 "synthetic_identity_norm": bool(metadata.get("synthetic_identity_norm", False)),

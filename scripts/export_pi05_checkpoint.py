@@ -8,9 +8,15 @@ import datetime as dt
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
+from pathlib import Path
+
+from vla_tidybench.openpi.deployment import (
+    CHECKPOINT_DIGEST_ALGORITHM,
+    checkpoint_fingerprint,
+    validate_formal_evaluation,
+)
 
 
 def data_root() -> Path:
@@ -48,6 +54,8 @@ def main() -> int:
         raise ValueError("formal export requires --evaluation-report")
     if args.allow_unvalidated and "smoke" not in args.stage:
         raise ValueError("--allow-unvalidated is restricted to a smoke stage label")
+    if args.evaluation_report is not None and (args.mode != "full" or args.stage != "stage3-hard-recovery"):
+        raise ValueError("formal export requires full mode and the stage3-hard-recovery label")
     checkpoint = args.checkpoint.expanduser().resolve()
     required = [
         checkpoint / "_CHECKPOINT_METADATA",
@@ -60,24 +68,28 @@ def main() -> int:
 
     evaluation: dict[str, object] | None = None
     evaluation_path: Path | None = None
+    file_count, byte_count, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
     if args.evaluation_report is not None:
         evaluation_path = args.evaluation_report.expanduser().resolve()
         evaluation = json.loads(evaluation_path.read_text(encoding="utf-8"))
-        if int(evaluation.get("schema_version", -1)) != 1:
-            raise ValueError("unsupported evaluation report schema")
-        if not bool(evaluation.get("gate_passed", False)):
-            raise ValueError("refusing to export a checkpoint that failed its evaluation gate")
-        if not bool(evaluation.get("autonomous_only", False)):
-            raise ValueError("formal deployment evaluation must contain autonomous rollouts only")
-        evaluated_checkpoint = Path(str(evaluation.get("checkpoint", ""))).expanduser().resolve()
-        if evaluated_checkpoint != checkpoint:
-            raise ValueError(f"evaluation checkpoint {evaluated_checkpoint} does not match {checkpoint}")
+        validate_formal_evaluation(
+            evaluation,
+            checkpoint=checkpoint,
+            checkpoint_sha256=checkpoint_sha256,
+        )
 
     project_root = Path(__file__).resolve().parents[1]
     project_commit = git_value(project_root, "rev-parse", "HEAD")
-    project_dirty = bool(git_value(project_root, "status", "--porcelain"))
-    if evaluation is not None and project_dirty:
-        raise ValueError("formal export requires a clean project checkout")
+    project_status = git_value(project_root, "status", "--porcelain")
+    project_dirty = project_status is None or bool(project_status)
+    if evaluation is not None:
+        valid_commit = project_commit is not None and len(project_commit) in (40, 64) and all(
+            char in "0123456789abcdef" for char in project_commit
+        )
+        if not valid_commit:
+            raise ValueError("formal export requires a valid Git commit")
+        if project_dirty:
+            raise ValueError("formal export requires a clean project checkout")
 
     output = args.output_root.expanduser().resolve() / args.name
     output.mkdir(parents=True, exist_ok=True)
@@ -104,10 +116,8 @@ def main() -> int:
             "gate_passed": True,
         }
 
-    file_count = sum(1 for path in checkpoint.rglob("*") if path.is_file())
-    byte_count = sum(path.stat().st_size for path in checkpoint.rglob("*") if path.is_file())
     manifest = {
-        "format_version": 1,
+        "format_version": 2,
         "name": args.name,
         "stage": args.stage,
         "dataset_repo": args.dataset_repo,
@@ -117,7 +127,11 @@ def main() -> int:
         "deployment_checkpoint": str(checkpoint_link),
         "file_count": file_count,
         "byte_count": byte_count,
-        "created_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "checkpoint_digest": {
+            "algorithm": CHECKPOINT_DIGEST_ALGORITHM,
+            "sha256": checkpoint_sha256,
+        },
+        "created_at_utc": dt.datetime.now(dt.UTC).isoformat(),
         "project_commit": project_commit,
         "project_dirty": project_dirty,
         "evaluation": evaluation_manifest,

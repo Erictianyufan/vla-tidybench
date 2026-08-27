@@ -11,9 +11,9 @@ import numpy as np
 from openpi.policies import policy_config
 from openpi.serving.websocket_policy_server import WebsocketPolicyServer
 from openpi.shared import normalize
+from vla_tidybench.openpi.deployment import checkpoint_fingerprint, load_deployment
 from vla_tidybench.openpi.drawer_config import make_config as make_open_config
 from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
-from vla_tidybench.openpi.deployment import load_deployment
 
 
 def identity_norm_stats() -> dict[str, normalize.NormStats]:
@@ -55,11 +55,13 @@ def main() -> None:
         if deployment.manifest.get("policy_config") != "drawer_four_skill":
             parser.error("deployment is not marked as the drawer_four_skill policy configuration")
         checkpoint = deployment.checkpoint
+        checkpoint_sha256 = deployment.checkpoint_sha256
         mode = deployment.policy_mode
         four_skill = True
     else:
         assert args.checkpoint is not None
         checkpoint = args.checkpoint.expanduser().resolve()
+        _, _, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
         mode = args.mode or "expert"
         four_skill = args.four_skill
 
@@ -76,6 +78,7 @@ def main() -> None:
             "project": "VLA-TidyBench",
             "policy": f"pi0.5-drawer-{mode}",
             "checkpoint": str(checkpoint),
+            "checkpoint_sha256": checkpoint_sha256,
             "deployment": str(deployment.root) if deployment is not None else None,
             "evaluation_gate_passed": bool(deployment and deployment.evaluation),
             "synthetic_identity_norm": args.synthetic_identity_norm,
