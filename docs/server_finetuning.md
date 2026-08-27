@@ -168,23 +168,32 @@ for the memory-constrained three-card full fine-tune.
 Inspect the live experiment without parsing terminal output manually:
 
 ```bash
-make pi05-experiment-status
+PI05_MAIN_DATASET_REPO=scuee_user06/vla_tidybench_drawer_v1_train \
+PI05_HARD_DATASET_REPO=scuee_user06/vla_tidybench_drawer_v1_hard_mix \
+  make pi05-experiment-status
 ```
 
 This writes
 `$VLA_TIDYBENCH_DATA/logs/pi05-three-stage-status.json` with the active stage,
 latest complete checkpoint per stage, latest tqdm step/rate, detected error
-signals, selected-GPU memory, training PID, and any foreign compute PIDs. Set
+signals, selected-GPU memory, training PID, and any foreign compute PIDs. A
+stage reports `training_completion_verified: true` only after its completion
+JSON, expected dataset and embedded normalization asset, clean provenance, and
+the complete checkpoint tree digest agree. `all_stages_complete` and
+`active_stage` use this verified result rather than checkpoint-file presence.
+Set
 `PI05_STATUS_FLAG=--fail-on-conflict` when using it as a resource gate in an
 external monitor.
 
 Use `TRAIN_STATE_FLAG=--resume` only for a compatible interrupted run. The
 default is `--overwrite`; experiment names are stable per stage so checkpoint
 selection and comparison remain auditable. Resume is evaluated independently
-for every stage: a stage with its final complete Orbax checkpoint is skipped,
-an incomplete stage resumes from its latest complete numeric checkpoint, and a
-stage that has not started is launched normally. A non-empty run directory
-without any complete checkpoint is rejected instead of being overwritten.
+for every stage: a stage is skipped only when its final complete Orbax
+checkpoint and content-bound `training_completion.json` both verify; a stage
+without a verified completion resumes from its latest complete numeric
+checkpoint, and a stage that has not started is launched normally. A non-empty
+run directory without any complete checkpoint is rejected instead of being
+overwritten.
 
 Each newly launched training subprocess also writes append-only numeric metrics
 to `train_metrics.jsonl` beside its checkpoints. Every record contains loss,
