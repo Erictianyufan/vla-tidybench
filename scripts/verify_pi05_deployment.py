@@ -26,6 +26,7 @@ def main() -> int:
                 "deployment": str(deployment.root),
                 "checkpoint": str(deployment.checkpoint),
                 "checkpoint_sha256": deployment.checkpoint_sha256,
+                "checkpoint_storage": deployment.manifest.get("checkpoint_storage", "symlink"),
                 "policy_mode": deployment.policy_mode,
                 "project_commit": deployment.manifest.get("project_commit"),
                 "file_count": deployment.manifest.get("file_count"),

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -195,7 +196,64 @@ def test_export_binds_evaluated_checkpoint_content(tmp_path: Path, monkeypatch: 
 
     deployment = load_deployment(tmp_path / "deploy" / "pi05-tidybench-final")
     assert deployment.manifest["format_version"] == 2
+    assert deployment.manifest["checkpoint_storage"] == "copy"
+    assert not (deployment.root / "checkpoint").is_symlink()
     assert deployment.checkpoint_sha256 == checkpoint_sha256
+
+    shutil.rmtree(checkpoint)
+    relocated = load_deployment(tmp_path / "deploy" / "pi05-tidybench-final")
+    assert relocated.checkpoint_sha256 == checkpoint_sha256
+
+
+def test_copy_manifest_rejects_a_checkpoint_symlink(tmp_path: Path) -> None:
+    deployment = make_deployment(tmp_path)
+    manifest_path = deployment / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["checkpoint_storage"] = "copy"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="real directory"):
+        load_deployment(deployment)
+
+
+def test_install_directory_replaces_complete_bundle(tmp_path: Path) -> None:
+    output = tmp_path / "deploy"
+    output.mkdir()
+    (output / "old.txt").write_text("old", encoding="utf-8")
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    (staging / "new.txt").write_text("new", encoding="utf-8")
+
+    exporter.install_directory(staging, output, replace=True)
+
+    assert not staging.exists()
+    assert not (output / "old.txt").exists()
+    assert (output / "new.txt").read_text(encoding="utf-8") == "new"
+    assert not (tmp_path / ".deploy.backup").exists()
+
+
+def test_install_directory_restores_prior_bundle_on_publish_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "deploy"
+    output.mkdir()
+    (output / "old.txt").write_text("old", encoding="utf-8")
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    original_rename = Path.rename
+
+    def fail_staging_publish(path: Path, target: Path) -> Path:
+        if path == staging:
+            raise OSError("simulated publish failure")
+        return original_rename(path, target)
+
+    monkeypatch.setattr(Path, "rename", fail_staging_publish)
+    with pytest.raises(OSError, match="simulated"):
+        exporter.install_directory(staging, output, replace=True)
+
+    assert (output / "old.txt").read_text(encoding="utf-8") == "old"
+    assert staging.is_dir()
+    assert not (tmp_path / ".deploy.backup").exists()
 
 
 def test_policy_probe_checks_action_shape_and_checkpoint_metadata() -> None:

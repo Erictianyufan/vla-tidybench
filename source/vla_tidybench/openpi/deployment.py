@@ -230,13 +230,25 @@ def load_deployment(path: Path, *, require_validated: bool = True) -> Deployment
         if bool(manifest.get("project_dirty", True)):
             raise ValueError("formal deployment was exported from a dirty project checkout")
 
-    link = root / "checkpoint"
-    if not link.is_symlink():
-        raise ValueError(f"deployment checkpoint must be a symbolic link: {link}")
-    checkpoint = link.resolve(strict=True)
+    checkpoint_entry = root / "checkpoint"
+    checkpoint_storage = str(manifest.get("checkpoint_storage", "symlink"))
     recorded_checkpoint = Path(str(manifest.get("checkpoint", ""))).expanduser().resolve()
-    if checkpoint != recorded_checkpoint:
-        raise ValueError(f"checkpoint link resolves to {checkpoint}, manifest records {recorded_checkpoint}")
+    if checkpoint_storage == "symlink":
+        if not checkpoint_entry.is_symlink():
+            raise ValueError(f"deployment checkpoint must be a symbolic link: {checkpoint_entry}")
+        checkpoint = checkpoint_entry.resolve(strict=True)
+        if checkpoint != recorded_checkpoint:
+            raise ValueError(
+                f"checkpoint link resolves to {checkpoint}, manifest records {recorded_checkpoint}"
+            )
+    elif checkpoint_storage == "copy":
+        if checkpoint_entry.is_symlink() or not checkpoint_entry.is_dir():
+            raise ValueError(f"copied deployment checkpoint must be a real directory: {checkpoint_entry}")
+        checkpoint = checkpoint_entry.resolve(strict=True)
+        if checkpoint.parent != root:
+            raise ValueError(f"copied deployment checkpoint escapes deployment root: {checkpoint}")
+    else:
+        raise ValueError(f"unsupported deployment checkpoint_storage: {checkpoint_storage!r}")
     missing = [
         str(checkpoint / relative)
         for relative in REQUIRED_CHECKPOINT_FILES
@@ -275,7 +287,7 @@ def load_deployment(path: Path, *, require_validated: bool = True) -> Deployment
         if format_version == 2:
             validate_formal_evaluation(
                 evaluation,
-                checkpoint=checkpoint,
+                checkpoint=recorded_checkpoint,
                 checkpoint_sha256=checkpoint_sha256,
             )
 

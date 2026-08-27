@@ -281,8 +281,12 @@ pi05_tidybench_drawer_four_skill_full/stage3-hard-recovery/2999 \
 
 This creates
 `$VLA_TIDYBENCH_DATA/checkpoints/deploy/pi05-tidybench-final/manifest.json`
-plus a checksum-bound copy of `evaluation.json` and a same-disk `checkpoint`
-link. The format-2 manifest stores a deterministic SHA-256 over every relative
+plus a checksum-bound copy of `evaluation.json` and, by default, a complete
+portable copy of the checkpoint weights. Set `EXPORT_STORAGE=symlink` only for
+a same-server deployment where avoiding the additional 12-GB-class copy is
+more important than portability. Both modes are built in a staging directory,
+verified before publication, and preserve the prior bundle if replacement
+fails. The format-2 manifest stores a deterministic SHA-256 over every relative
 checkpoint path, file size and file byte. The policy service publishes that
 digest into every rollout, the evaluation report requires one exact digest,
 and export refuses a report whose evaluated digest differs from the checkpoint

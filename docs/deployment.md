@@ -55,6 +55,13 @@ closed-loop rollout and evaluation report, checked during export, and verified
 again before serving the deployment. File count and total bytes remain useful
 diagnostics but are not treated as cryptographic identity.
 
+Formal exports copy the checkpoint into the deployment bundle by default, so
+the directory can be transferred to an Isaac host without retaining the source
+training path. `EXPORT_STORAGE=symlink` is the explicit zero-copy option for a
+deployment that remains on the training server. Export verifies the copied
+tree before atomically publishing it; replacement preserves the previous
+deployment if staging or verification fails.
+
 ## Known vendor-image constraints
 
 - `isaaclab.sh` fails if `/home/ubuntu/env_isaaclab` is not activated first.

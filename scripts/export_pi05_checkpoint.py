@@ -10,11 +10,13 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from vla_tidybench.openpi.deployment import (
     CHECKPOINT_DIGEST_ALGORITHM,
     checkpoint_fingerprint,
+    load_deployment,
     validate_formal_evaluation,
 )
 
@@ -30,6 +32,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stage", default="stage3-hard-recovery")
     parser.add_argument("--dataset-repo", required=True)
     parser.add_argument("--mode", choices=("lora", "expert", "full"), default="full")
+    parser.add_argument(
+        "--checkpoint-storage",
+        choices=("copy", "symlink"),
+        default="copy",
+        help="copy creates a portable bundle; symlink avoids duplicating weights on one host",
+    )
     parser.add_argument("--evaluation-report", type=Path)
     parser.add_argument(
         "--allow-unvalidated",
@@ -48,8 +56,32 @@ def git_value(project_root: Path, *arguments: str) -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def install_directory(staging: Path, output: Path, *, replace: bool) -> None:
+    """Install a fully built bundle and preserve an existing bundle on failure."""
+
+    if not output.exists() and not output.is_symlink():
+        staging.rename(output)
+        return
+    if not replace:
+        raise FileExistsError(f"deployment already exists: {output}; pass --replace")
+    if output.is_symlink() or not output.is_dir():
+        raise ValueError(f"refusing to replace a non-directory deployment: {output}")
+    backup = output.with_name(f".{output.name}.backup")
+    if backup.exists() or backup.is_symlink():
+        raise FileExistsError(f"stale deployment backup requires inspection: {backup}")
+    output.rename(backup)
+    try:
+        staging.rename(output)
+    except BaseException:
+        backup.rename(output)
+        raise
+    shutil.rmtree(backup)
+
+
 def main() -> int:
     args = parse_args()
+    if not args.name or Path(args.name).name != args.name:
+        raise ValueError("--name must be one directory name without path separators")
     if args.evaluation_report is None and not args.allow_unvalidated:
         raise ValueError("formal export requires --evaluation-report")
     if args.allow_unvalidated and "smoke" not in args.stage:
@@ -91,54 +123,64 @@ def main() -> int:
         if project_dirty:
             raise ValueError("formal export requires a clean project checkout")
 
-    output = args.output_root.expanduser().resolve() / args.name
-    output.mkdir(parents=True, exist_ok=True)
-    checkpoint_link = output / "checkpoint"
-    if checkpoint_link.exists() or checkpoint_link.is_symlink():
-        if not args.replace:
-            raise FileExistsError(f"deployment link already exists: {checkpoint_link}")
-        if checkpoint_link.is_dir() and not checkpoint_link.is_symlink():
-            raise IsADirectoryError(f"refusing to replace a real directory: {checkpoint_link}")
-        checkpoint_link.unlink()
-    checkpoint_link.symlink_to(checkpoint, target_is_directory=True)
+    output_root = args.output_root.expanduser().resolve()
+    output = output_root / args.name
+    if (output.exists() or output.is_symlink()) and not args.replace:
+        raise FileExistsError(f"deployment already exists: {output}; pass --replace")
+    output_root.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{args.name}.staging-", dir=output_root))
+    try:
+        checkpoint_entry = staging / "checkpoint"
+        if args.checkpoint_storage == "copy":
+            shutil.copytree(checkpoint, checkpoint_entry)
+            copied_fingerprint = checkpoint_fingerprint(checkpoint_entry)
+            if copied_fingerprint != (file_count, byte_count, checkpoint_sha256):
+                raise ValueError("copied checkpoint fingerprint differs from its source")
+        else:
+            checkpoint_entry.symlink_to(checkpoint, target_is_directory=True)
 
-    evaluation_manifest: dict[str, object] | None = None
-    if evaluation_path is not None and evaluation is not None:
-        deployed_evaluation = output / "evaluation.json"
-        if evaluation_path != deployed_evaluation:
+        evaluation_manifest: dict[str, object] | None = None
+        if evaluation_path is not None and evaluation is not None:
+            deployed_evaluation = staging / "evaluation.json"
             shutil.copyfile(evaluation_path, deployed_evaluation)
-        evaluation_manifest = {
-            "path": str(deployed_evaluation),
-            "sha256": hashlib.sha256(deployed_evaluation.read_bytes()).hexdigest(),
-            "episode_count": evaluation.get("episode_count"),
-            "overall_success_rate": evaluation.get("overall_success_rate"),
-            "p95_infer_ms": evaluation.get("p95_infer_ms"),
-            "gate_passed": True,
-        }
+            evaluation_manifest = {
+                "path": "evaluation.json",
+                "sha256": hashlib.sha256(deployed_evaluation.read_bytes()).hexdigest(),
+                "episode_count": evaluation.get("episode_count"),
+                "overall_success_rate": evaluation.get("overall_success_rate"),
+                "p95_infer_ms": evaluation.get("p95_infer_ms"),
+                "gate_passed": True,
+            }
 
-    manifest = {
-        "format_version": 2,
-        "name": args.name,
-        "stage": args.stage,
-        "dataset_repo": args.dataset_repo,
-        "policy_mode": args.mode,
-        "policy_config": "drawer_four_skill",
-        "checkpoint": str(checkpoint),
-        "deployment_checkpoint": str(checkpoint_link),
-        "file_count": file_count,
-        "byte_count": byte_count,
-        "checkpoint_digest": {
-            "algorithm": CHECKPOINT_DIGEST_ALGORITHM,
-            "sha256": checkpoint_sha256,
-        },
-        "created_at_utc": dt.datetime.now(dt.UTC).isoformat(),
-        "project_commit": project_commit,
-        "project_dirty": project_dirty,
-        "evaluation": evaluation_manifest,
-        "serve_command": f"make pi05-deployment-serve DEPLOYMENT={output}",
-    }
-    manifest_path = output / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        manifest = {
+            "format_version": 2,
+            "name": args.name,
+            "stage": args.stage,
+            "dataset_repo": args.dataset_repo,
+            "policy_mode": args.mode,
+            "policy_config": "drawer_four_skill",
+            "checkpoint": str(checkpoint),
+            "checkpoint_storage": args.checkpoint_storage,
+            "deployment_checkpoint": "checkpoint",
+            "file_count": file_count,
+            "byte_count": byte_count,
+            "checkpoint_digest": {
+                "algorithm": CHECKPOINT_DIGEST_ALGORITHM,
+                "sha256": checkpoint_sha256,
+            },
+            "created_at_utc": dt.datetime.now(dt.UTC).isoformat(),
+            "project_commit": project_commit,
+            "project_dirty": project_dirty,
+            "evaluation": evaluation_manifest,
+            "serve_command": f"make pi05-deployment-serve DEPLOYMENT={output}",
+        }
+        manifest_path = staging / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        load_deployment(staging, require_validated=evaluation is not None)
+        install_directory(staging, output, replace=args.replace)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
     print(json.dumps(manifest, indent=2))
     return 0
 
