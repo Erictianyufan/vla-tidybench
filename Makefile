@@ -95,9 +95,11 @@ pi05-prepare-norm-stats:
 	@test -n "$(MAIN_DATASET_REPO)" -a -n "$(HARD_DATASET_REPO)" || \
 		(echo "usage: make pi05-prepare-norm-stats MAIN_DATASET_REPO=org/data HARD_DATASET_REPO=org/hard-mix" >&2; exit 2)
 	VLA_TIDYBENCH_DRAWER_FOUR_SKILL_REPO_ID="$(MAIN_DATASET_REPO)" \
-		./scripts/run_openpi.sh scripts/compute_drawer_norm_stats.py --four-skill
+		./scripts/run_openpi.sh scripts/compute_drawer_norm_stats.py --four-skill --mode lora
+	VLA_TIDYBENCH_DRAWER_FOUR_SKILL_REPO_ID="$(MAIN_DATASET_REPO)" \
+		./scripts/run_openpi.sh scripts/compute_drawer_norm_stats.py --four-skill --mode full
 	VLA_TIDYBENCH_DRAWER_FOUR_SKILL_REPO_ID="$(HARD_DATASET_REPO)" \
-		./scripts/run_openpi.sh scripts/compute_drawer_norm_stats.py --four-skill
+		./scripts/run_openpi.sh scripts/compute_drawer_norm_stats.py --four-skill --mode full
 
 pi05-formal-prepare:
 	$(MAKE) pi05-plan-data \

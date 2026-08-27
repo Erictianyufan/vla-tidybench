@@ -67,7 +67,8 @@ make pi05-formal-pipeline \
 
 For a fresh experiment use `TRAIN_STATE_FLAG=--overwrite`. The pipeline invokes
 the audited planner before any training, converts all four frozen manifests,
-computes nominal and hard-mixture normalization statistics independently, and
+computes the nominal statistics for both the LoRA and full configuration asset
+directories plus independent hard-mixture statistics for the full stage, and
 then launches the LoRA, full, and hard-recovery stages.
 
 The planner defaults to a 10% nominal validation split and a 20% hard-recovery

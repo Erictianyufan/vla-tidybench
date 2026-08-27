@@ -20,6 +20,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--max-frames", type=int)
     parser.add_argument("--four-skill", action="store_true")
+    parser.add_argument("--mode", choices=("lora", "expert", "full"), default="lora")
     args = parser.parse_args()
     script = openpi_script()
     spec = importlib.util.spec_from_file_location("openpi_compute_norm_stats", script)
@@ -27,7 +28,7 @@ def main() -> int:
         raise RuntimeError(f"cannot load {script}")
     official = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(official)
-    config = (make_four_skill_config if args.four_skill else make_open_config)()
+    config = (make_four_skill_config if args.four_skill else make_open_config)(finetune_mode=args.mode)
     official._config._CONFIGS_DICT[config.name] = config
     official.main(config.name, max_frames=args.max_frames)
     return 0
