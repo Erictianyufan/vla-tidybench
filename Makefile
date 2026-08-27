@@ -9,7 +9,7 @@ PI05_MAIN_CONFIG ?= configs/data/drawer_four_skill_formal.json
 PI05_HARD_CONFIG ?= configs/data/drawer_four_skill_hard_recovery.json
 PI05_REPO_PREFIX ?= $(USER)/vla_tidybench_drawer_v1
 
-.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-four-skill-norm-stats drawer-train drawer-train-lora drawer-train-full drawer-four-skill-train-lora drawer-four-skill-train-full pi05-plan-data pi05-convert-data pi05-prepare-norm-stats pi05-formal-prepare pi05-formal-pipeline pi05-three-stage-synthetic-smoke pi05-three-stage-smoke pi05-three-stage-train pi05-training-summary pi05-experiment-status pi05-eval-suite pi05-export-final pi05-verify-deployment pi05-deployment-serve pi05-policy-probe drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
+.PHONY: doctor test sim-smoke sim-camera-smoke drawer-scene-smoke drawer-open-smoke drawer-pick-smoke drawer-place-smoke drawer-close-smoke drawer-full-smoke drawer-replay drawer-atomic-validate drawer-convert-openpi drawer-norm-stats drawer-four-skill-norm-stats drawer-train drawer-train-lora drawer-train-full drawer-four-skill-train-lora drawer-four-skill-train-full pi05-plan-data pi05-convert-data pi05-prepare-norm-stats pi05-formal-prepare pi05-formal-pipeline pi05-three-stage-synthetic-smoke pi05-three-stage-smoke pi05-three-stage-train pi05-training-summary pi05-experiment-status pi05-lock-eval-contexts pi05-eval-suite pi05-export-final pi05-verify-deployment pi05-deployment-serve pi05-policy-probe drawer-policy-smoke drawer-policy-serve drawer-policy-run drawer-demo continuous-medicine-demo pick-rl-train pick-rl-record media-gifs extension-smoke ood-plan protocol-smoke record scripted-smoke scripted-collect replay annotate mimic-smoke convert-openpi-smoke openpi-norm-stats openpi-data-smoke train-pi05-smoke package-demo prepublish
 
 doctor:
 	./scripts/remote_doctor.sh
@@ -166,6 +166,11 @@ pi05-experiment-status:
 		--output $${PI05_STATUS_REPORT:-$(VLA_TIDYBENCH_DATA)/logs/pi05-three-stage-status.json} \
 		$${PI05_STATUS_FLAG:-}
 
+pi05-lock-eval-contexts:
+	./scripts/run_openpi.sh scripts/lock_pi05_eval_contexts.py \
+		--manifest $${EVAL_CONTEXT_MANIFEST:-$(VLA_TIDYBENCH_DATA)/manifests/pi05-formal/main_validation.json} \
+		--data-root $${EVAL_DATA_ROOT:-$(VLA_TIDYBENCH_DATA)/raw} --replace
+
 pi05-export-final:
 	@test -n "$(CHECKPOINT)" -a -n "$(DATASET_REPO)" -a -n "$(EVAL_REPORT)" || \
 		(echo "usage: make pi05-export-final CHECKPOINT=/abs/step DATASET_REPO=org/hard-mix EVAL_REPORT=/abs/evaluation.json" >&2; exit 2)
@@ -195,6 +200,7 @@ pi05-eval-suite:
 	./scripts/run_pi05_eval_suite.py \
 		--output-root $${EVAL_ROOT:-$(VLA_TIDYBENCH_DATA)/eval/pi05-formal} \
 		--context-manifest $${EVAL_CONTEXT_MANIFEST:-$(VLA_TIDYBENCH_DATA)/manifests/pi05-formal/main_validation.json} \
+		--context-lock $${EVAL_CONTEXT_LOCK:-$(VLA_TIDYBENCH_DATA)/manifests/pi05-formal/main_validation.lock.json} \
 		--data-root $${EVAL_DATA_ROOT:-$(VLA_TIDYBENCH_DATA)/raw} \
 		--host $${POLICY_HOST:-127.0.0.1} --port $${POLICY_PORT:-8000} \
 		--min-success-rate $${MIN_SUCCESS_RATE:-0.6} \

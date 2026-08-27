@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 import h5py
+from vla_tidybench.evaluation_contexts import validate_context_lock
 
 SKILLS = ("open", "pick", "place", "close")
 DEFAULT_MAX_STEPS = {"open": 360, "pick": 300, "place": 420, "close": 300}
@@ -77,6 +78,16 @@ def main() -> int:
         help="frozen validation manifest whose episode initial states define the evaluation contexts",
     )
     parser.add_argument("--data-root", type=Path, default=data_root / "raw")
+    parser.add_argument(
+        "--context-lock",
+        type=Path,
+        help="defaults to <context-manifest stem>.lock.json beside the manifest",
+    )
+    parser.add_argument(
+        "--skip-context-integrity",
+        action="store_true",
+        help="systems dry-runs only; formal evaluation requires the content lock",
+    )
     parser.add_argument("--execute-steps", type=int, default=4)
     parser.add_argument("--max-steps", type=int, help="override the skill-specific limits")
     parser.add_argument("--min-success-rate", type=float, default=0.6)
@@ -91,6 +102,8 @@ def main() -> int:
         parser.error("--skills must not contain duplicates")
     if args.execute_steps < 1 or (args.max_steps is not None and args.max_steps < 1):
         parser.error("step counts must be positive")
+    if args.skip_context_integrity and not args.dry_run:
+        parser.error("--skip-context-integrity is permitted only with --dry-run")
 
     project_root = Path(__file__).resolve().parents[1]
     isaac_runner = project_root / "scripts" / "run_isaac.sh"
@@ -98,9 +111,17 @@ def main() -> int:
     output_root = args.output_root.expanduser().resolve()
     infrastructure_failures: list[str] = []
     expected_outputs: list[Path] = []
+    context_manifest = args.context_manifest.expanduser().resolve()
+    context_lock = (
+        args.context_lock.expanduser().resolve()
+        if args.context_lock
+        else context_manifest.with_suffix(".lock.json")
+    )
     try:
+        if not args.skip_context_integrity:
+            validate_context_lock(context_lock, context_manifest, args.data_root)
         contexts = load_contexts(
-            args.context_manifest.expanduser().resolve(),
+            context_manifest,
             args.data_root,
             skills=args.skills,
             seeds=args.seeds,

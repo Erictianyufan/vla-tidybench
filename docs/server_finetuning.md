@@ -254,7 +254,8 @@ make drawer-policy-serve \
 pi05_tidybench_drawer_four_skill_full/stage3-hard-recovery/2999 \
   POLICY_GPU=1 POLICY_MODE=full POLICY_CONFIG_FLAG=--four-skill
 
-# Isaac Lab machine: copy raw nominal HDF5 plus main_validation.json first.
+# Isaac Lab machine: copy raw nominal HDF5, main_validation.json, and
+# main_validation.lock.json first.
 # The suite uses 5 locked, distinct held-out contexts per skill and no
 # teacher/DLS residual.
 make pi05-eval-suite POLICY_HOST=<training-server-ip> POLICY_PORT=8000
@@ -271,18 +272,31 @@ Git commits and dirty-worktree flags. Formal evaluation requires both ends to
 use the same clean commit, and export requires that exact commit as well.
 `main_validation.json` selects the contexts from the raw nominal HDF5 files.
 Only each held-out episode's initial simulator state is restored: validation
-actions are never replayed and are never supplied to the policy. The raw files
-and manifest must therefore be available on the Isaac Lab machine at
-`$VLA_TIDYBENCH_DATA/raw` and
-`$VLA_TIDYBENCH_DATA/manifests/pi05-formal/main_validation.json`. Override
-those locations explicitly when needed:
+actions are never replayed and are never supplied to the policy. The raw files,
+manifest, and content lock must therefore be available on the Isaac Lab machine
+at `$VLA_TIDYBENCH_DATA/raw` and
+`$VLA_TIDYBENCH_DATA/manifests/pi05-formal/main_validation.json` /
+`main_validation.lock.json`. Override those locations explicitly when needed:
 
 ```bash
 make pi05-eval-suite \
   POLICY_HOST=<training-server-ip> POLICY_PORT=8000 \
   EVAL_CONTEXT_MANIFEST=/absolute/path/main_validation.json \
+  EVAL_CONTEXT_LOCK=/absolute/path/main_validation.lock.json \
   EVAL_DATA_ROOT=/absolute/path/raw
 ```
+
+Generate or re-verify the deterministic lock before transferring the context
+set:
+
+```bash
+make pi05-lock-eval-contexts
+```
+
+The lock records the validation-manifest hash plus the byte count, SHA-256 and
+episode indices for every source HDF5. Formal evaluation recomputes all hashes
+before launching Isaac; the integrity check can be skipped only together with
+`--dry-run`.
 
 Formal rollouts use success predicate
 `drawer_skill_v2_relative_stable`. OPEN and CLOSE must reach their drawer

@@ -9,6 +9,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pytest
+from vla_tidybench.evaluation_contexts import build_context_lock
 from vla_tidybench.task_metrics import FORMAL_SUCCESS_HOLD_STEPS, SUCCESS_PREDICATE_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -239,6 +240,8 @@ def test_eval_suite_loads_distinct_validation_contexts(tmp_path: Path) -> None:
         json.dumps({"schema_version": 1, "split": "validation", "sources": sources}),
         encoding="utf-8",
     )
+    lock = manifest.with_suffix(".lock.json")
+    lock.write_text(json.dumps(build_context_lock(manifest, raw)), encoding="utf-8")
 
     contexts = evaluation_suite.load_contexts(
         manifest,
@@ -273,6 +276,9 @@ def test_eval_suite_summarizes_only_outputs_from_the_current_matrix(
     manifest.write_text(
         json.dumps({"schema_version": 1, "split": "validation", "sources": sources}),
         encoding="utf-8",
+    )
+    manifest.with_suffix(".lock.json").write_text(
+        json.dumps(build_context_lock(manifest, raw)), encoding="utf-8"
     )
     calls: list[list[str]] = []
 
@@ -334,6 +340,25 @@ def test_summary_cli_rejects_duplicate_explicit_episode_paths(
 
     with pytest.raises(SystemExit) as error:
         evaluation.main()
+    assert error.value.code == 2
+
+
+def test_eval_suite_integrity_bypass_is_dry_run_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pi05_eval_suite.py",
+            "--output-root",
+            str(tmp_path / "eval"),
+            "--skip-context-integrity",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as error:
+        evaluation_suite.main()
     assert error.value.code == 2
 
 
