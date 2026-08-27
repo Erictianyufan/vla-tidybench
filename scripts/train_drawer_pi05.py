@@ -10,15 +10,18 @@ import json
 import os
 from pathlib import Path
 
-from vla_tidybench.openpi.deployment import CHECKPOINT_DIGEST_ALGORITHM, checkpoint_fingerprint
+from vla_tidybench.openpi.deployment import (
+    CHECKPOINT_DIGEST_ALGORITHM,
+    checkpoint_fingerprint,
+)
 from vla_tidybench.openpi.gpu_preflight import selected_gpu_indices, wait_for_exclusive_gpus
 from vla_tidybench.openpi.training_metrics import (
     JsonlTrainingMetrics,
     build_training_provenance,
     lerobot_dataset_path,
     source_tree_fingerprint,
-    validate_dataset_fingerprint,
     validate_completed_training_run,
+    validate_dataset_fingerprint,
     write_training_completion,
 )
 

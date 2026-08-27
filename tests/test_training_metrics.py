@@ -10,8 +10,8 @@ from vla_tidybench.openpi.training_metrics import (
     JsonlTrainingMetrics,
     lerobot_dataset_path,
     source_tree_fingerprint,
-    validate_dataset_fingerprint,
     validate_completed_training_run,
+    validate_dataset_fingerprint,
     write_training_completion,
 )
 
