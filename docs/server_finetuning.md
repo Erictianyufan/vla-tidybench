@@ -208,6 +208,21 @@ three final steps (`4999`, `9999`, and `2999`) are present. The metric file is
 local and independent of WandB, so disabling external experiment tracking does
 not discard the optimization trace.
 
+If a legacy process was launched before the JSONL hook existed but its console
+log contains the standard `Step N: grad_norm=..., loss=..., param_norm=...`
+records, recover that observed prefix once with:
+
+```bash
+make pi05-recover-stage1-metrics \
+  MAIN_DATASET_REPO=owner/vla_tidybench_drawer_v1_train \
+  RECOVERY_PROJECT_COMMIT=<commit-loaded-at-launch>
+```
+
+The recovery command refuses to replace an existing metric file, snapshots and
+hashes the exact source log, and marks every recovered record explicitly. It
+does not invent missing steps or claim a formal completion; a later native
+resumed process must still emit the final step and completion report.
+
 Before a newly launched stage process returns success, it verifies the final
 numeric checkpoint, required Orbax metadata, the unique embedded normalization
 asset ID, the dataset identity, the final JSONL metric step, and the full
