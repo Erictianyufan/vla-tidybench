@@ -37,7 +37,7 @@ flowchart LR
     A["Isaac Sim / Isaac Lab"] --> B["Truth FSM + DLS IK"]
     B --> C["HDF5 replay QA"]
     C --> D["LeRobot dataset + norm stats"]
-    D --> E["OpenPI π0.5 LoRA"]
+    D --> E["OpenPI π0.5 LoRA / full / hard recovery"]
     E --> F["WebSocket policy server"]
     F --> G["Isaac closed-loop client"]
     G --> H["Hero / table / wrist cameras"]
@@ -50,7 +50,12 @@ flowchart LR
 
 推荐的双 GPU 分工：GPU 0 运行 Isaac Sim 与相机，GPU 1 运行 π0.5 推理；LoRA 训练阶段使用两张 GPU 做 FSDP。
 
-## 实测结果
+## 历史成本受限 Smoke 实测结果
+
+> 本节记录的是早期 8-episode / 500-step 与四技能最小数据实验，
+> 用于证明仿真、训练和策略桥能够贯通；它不是当前 360-episode 正式
+> 三阶段训练的结果，也不构成纯 π0.5 四技能成功声明。正式状态以
+> `make pi05-experiment-status`、format-v3 部署包和锁定的 Isaac 评估报告为准。
 
 | 环节 | 结果 |
 | --- | --- |
@@ -288,7 +293,7 @@ make prepublish
 | --- |
 | <img src="docs/media/four-skills-2x2.gif" alt="OPEN、PICK、PLACE、CLOSE 四个原子技能三机位展示" width="920"> |
 
-| 四技能最小训练成功 | 完整项目成片 |
+| 四技能最小训练历史演示 | 历史成本受限完整链路成片 |
 | --- | --- |
 | <img src="docs/media/pi05-four-skill-minimal-success.gif" alt="π0.5 四技能最小训练成功" width="460"> | <img src="docs/media/vla-tidybench-final-project.gif" alt="VLA-TidyBench 完整项目成片" width="460"> |
 | [观看 MP4](docs/media/pi05-four-skill-minimal-success.mp4) | [观看 MP4](docs/media/vla-tidybench-final-project.mp4) |

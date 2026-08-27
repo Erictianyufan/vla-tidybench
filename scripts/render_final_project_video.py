@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the final honest VLA-TidyBench project reel from verified artifacts."""
+"""Build the historical cost-bounded VLA-TidyBench smoke reel."""
 
 from __future__ import annotations
 
@@ -84,11 +84,11 @@ def main() -> None:
         ],
     )
     frames += card(
-        "Minimal data and training",
+        "Historical minimal-data smoke",
         [
             "8 successful OPEN demonstrations | 1,092 RGB frames",
             "OpenPI pi0.5 LoRA | 500 steps | 2 x RTX 4090",
-            "Final training loss: 0.0316 | warm inference: about 96 ms",
+            "500-step smoke loss: 0.0316 | warm inference: about 96 ms",
         ],
     )
     frames += recording_frames(
@@ -100,7 +100,7 @@ def main() -> None:
     frames += card(
         "Observed model result",
         [
-            "The complete training and deployment chain executed successfully.",
+            "The cost-bounded smoke training and deployment chain executed successfully.",
             "The small-data policy moved near the cabinet but did not establish a stable handle contact.",
             "This unsuccessful rollout is retained instead of being presented as a policy success.",
         ],
@@ -120,11 +120,11 @@ def main() -> None:
     )
     frames += decode_video(args.skills)
     frames += card(
-        "Project status",
+        "Historical smoke status",
         [
-            "Completed: simulator, data, LoRA, checkpoint, policy bridge, closed loop, video",
-            "Preserved: Mimic, OOD evaluation, and frozen-VLA residual-RL extension contracts",
-            "Next: add diverse handle-contact data before further policy optimization",
+            "Smoke completed: simulator, data, LoRA, policy bridge, closed loop, video",
+            "Not a result from the formal three-stage 360-episode experiment",
+            "Formal claims require a format-v3 deployment and locked Isaac evaluation",
         ],
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
