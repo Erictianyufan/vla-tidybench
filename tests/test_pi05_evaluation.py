@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -236,6 +237,88 @@ def test_eval_suite_loads_distinct_validation_contexts(tmp_path: Path) -> None:
     for skill in evaluation_suite.SKILLS:
         assert len({contexts[(skill, seed)][1] for seed in (300, 301, 302)}) == 3
         assert all(contexts[(skill, seed)][0].name == f"drawer_{skill}_formal.hdf5" for seed in (300, 301, 302))
+
+
+def test_eval_suite_summarizes_only_outputs_from_the_current_matrix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    sources = []
+    for skill in evaluation_suite.SKILLS:
+        source = raw / f"drawer_{skill}_formal.hdf5"
+        with h5py.File(source, "w") as dataset:
+            dataset.attrs["format_version"] = 1
+            data = dataset.create_group("data")
+            for name in ("demo_0", "demo_1"):
+                data.create_group(name)
+        sources.append({"file": source.name, "episode_indices": [0, 1], "prompt": skill})
+    manifest = tmp_path / "validation.json"
+    manifest.write_text(
+        json.dumps({"schema_version": 1, "split": "validation", "sources": sources}),
+        encoding="utf-8",
+    )
+    calls: list[list[str]] = []
+
+    def capture(command, **_kwargs):
+        normalized = [str(part) for part in command]
+        calls.append(normalized)
+        if "--output" in normalized and "summarize_pi05_eval.py" not in normalized[1]:
+            output = Path(normalized[normalized.index("--output") + 1])
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.touch()
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(evaluation_suite.subprocess, "run", capture)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pi05_eval_suite.py",
+            "--output-root",
+            str(tmp_path / "eval"),
+            "--context-manifest",
+            str(manifest),
+            "--data-root",
+            str(raw),
+            "--seeds",
+            "300",
+            "301",
+        ],
+    )
+
+    assert evaluation_suite.main() == 0
+    summary = calls[-1]
+    explicit = [summary[index + 1] for index, value in enumerate(summary) if value == "--episode"]
+    assert len(explicit) == len(evaluation_suite.SKILLS) * 2
+    assert len(set(explicit)) == len(explicit)
+    assert all(Path(path).name in ("seed_300.hdf5", "seed_301.hdf5") for path in explicit)
+
+
+def test_summary_cli_rejects_duplicate_explicit_episode_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    episode = tmp_path / "episode.hdf5"
+    episode.touch()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "summarize_pi05_eval.py",
+            "--input-root",
+            str(tmp_path),
+            "--output",
+            str(tmp_path / "evaluation.json"),
+            "--episode",
+            str(episode),
+            "--episode",
+            str(episode),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as error:
+        evaluation.main()
+    assert error.value.code == 2
 
 
 def test_closed_loop_records_selected_skill_and_checkpoint() -> None:

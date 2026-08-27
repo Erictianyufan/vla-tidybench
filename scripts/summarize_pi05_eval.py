@@ -230,6 +230,13 @@ def summarize(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-root", type=Path, required=True)
+    parser.add_argument(
+        "--episode",
+        dest="episodes",
+        action="append",
+        type=Path,
+        help="exact rollout to include; repeat to exclude stale files below input-root",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--skills", nargs="+", choices=SKILLS, default=list(SKILLS))
     parser.add_argument("--min-episodes-per-skill", type=int, default=3)
@@ -244,9 +251,22 @@ def main() -> int:
     if args.max_p95_infer_ms is not None and args.max_p95_infer_ms <= 0:
         parser.error("--max-p95-infer-ms must be positive")
 
-    paths = sorted(args.input_root.rglob("*.hdf5"))
+    paths = (
+        [path.expanduser().resolve() for path in args.episodes]
+        if args.episodes
+        else sorted(args.input_root.rglob("*.hdf5"))
+    )
     if not paths:
         parser.error(f"no HDF5 evaluations below {args.input_root}")
+    if len(set(paths)) != len(paths):
+        parser.error("duplicate --episode paths are not allowed")
+    input_root = args.input_root.expanduser().resolve()
+    outside = [str(path) for path in paths if not path.resolve().is_relative_to(input_root)]
+    if outside:
+        parser.error("evaluation episodes must remain below input-root: " + ", ".join(outside))
+    missing = [str(path) for path in paths if not path.is_file()]
+    if missing:
+        parser.error("evaluation episodes are missing: " + ", ".join(missing))
     try:
         episodes = [read_episode(path, allow_assisted=args.allow_assisted) for path in paths]
         report = summarize(

@@ -235,7 +235,10 @@ make pi05-eval-suite POLICY_HOST=<training-server-ip> POLICY_PORT=8000
 The default engineering acceptance gate requires all four skills, five unique
 seeds and five distinct held-out initial-state contexts per skill, at least
 `60%` autonomous success for every skill, one exact checkpoint across all
-rollouts, and overall P95 policy latency at most `250 ms`.
+rollouts, and overall P95 policy latency at most `250 ms`. The suite passes the
+exact 20 paths from its current skill/seed matrix to the summarizer; unrelated
+or stale HDF5 files below the evaluation directory are never counted toward the
+gate.
 `main_validation.json` selects the contexts from the raw nominal HDF5 files.
 Only each held-out episode's initial simulator state is restored: validation
 actions are never replayed and are never supplied to the policy. The raw files

@@ -97,6 +97,7 @@ def main() -> int:
     rollout_script = project_root / "scripts" / "run_drawer_pi05_closed_loop.py"
     output_root = args.output_root.expanduser().resolve()
     infrastructure_failures: list[str] = []
+    expected_outputs: list[Path] = []
     try:
         contexts = load_contexts(
             args.context_manifest.expanduser().resolve(),
@@ -110,6 +111,7 @@ def main() -> int:
     for skill in args.skills:
         for seed in args.seeds:
             output = output_root / skill / f"seed_{seed}.hdf5"
+            expected_outputs.append(output)
             if output.exists() and not args.overwrite and not args.dry_run:
                 parser.error(f"evaluation output exists: {output}; pass --overwrite")
             command = [
@@ -170,6 +172,8 @@ def main() -> int:
         "--max-p95-infer-ms",
         str(args.max_p95_infer_ms),
     ]
+    for output in expected_outputs:
+        summary_command.extend(("--episode", str(output)))
     print("summary:", " ".join(summary_command), flush=True)
     if args.dry_run:
         return 0
