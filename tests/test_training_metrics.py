@@ -8,10 +8,12 @@ import pytest
 from vla_tidybench.openpi.deployment import checkpoint_fingerprint
 from vla_tidybench.openpi.training_metrics import (
     JsonlTrainingMetrics,
+    OPENPI_PROVENANCE_PATHS,
     lerobot_dataset_path,
     source_tree_fingerprint,
     validate_completed_training_run,
     validate_dataset_fingerprint,
+    validate_openpi_source_lock,
     write_training_completion,
 )
 
@@ -240,3 +242,22 @@ def test_dataset_fingerprint_detects_changes(tmp_path: Path) -> None:
     (tmp_path / "episode.parquet").write_bytes(b"after")
     with pytest.raises(ValueError, match="changed during training"):
         validate_dataset_fingerprint(tmp_path, expected)
+
+
+def test_openpi_source_lock_rejects_drift(tmp_path: Path) -> None:
+    lock = tmp_path / "openpi.lock.json"
+    lock.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "digest_algorithm": "sha256-path-bytes-v1",
+                "paths": [path.as_posix() for path in OPENPI_PROVENANCE_PATHS],
+                "source_files": 72,
+                "source_sha256": "a" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+    validate_openpi_source_lock(lock, source_files=72, source_sha256="a" * 64)
+    with pytest.raises(ValueError, match="does not match"):
+        validate_openpi_source_lock(lock, source_files=72, source_sha256="b" * 64)

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "digest_algorithm": "sha256-path-bytes-v1",
+  "paths": [
+    "scripts/train.py",
+    "src/openpi",
+    "packages/openpi-client/src",
+    "pyproject.toml",
+    "uv.lock"
+  ],
+  "source_files": 72,
+  "source_sha256": "69f4822188aeab6f2a2a3dbf49458ba94b895c2b0892eda2bd055d42261b5390"
+}

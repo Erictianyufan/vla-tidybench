@@ -22,6 +22,7 @@ from vla_tidybench.openpi.training_metrics import (
     source_tree_fingerprint,
     validate_completed_training_run,
     validate_dataset_fingerprint,
+    validate_openpi_source_lock,
     write_training_completion,
 )
 
@@ -59,6 +60,12 @@ def main() -> int:
     parser.add_argument("--dataset-repo", help="override the LeRobot dataset repository")
     parser.add_argument("--init-params", type=Path, help="Orbax params used to initialize this stage")
     parser.add_argument(
+        "--openpi-source-lock",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "configs" / "openpi" / "pi05_source.lock.json",
+        help="checked-in identity of the OpenPI source tree permitted for this experiment",
+    )
+    parser.add_argument(
         "--synthetic-data",
         action="store_true",
         help="use OpenPI fake tensors for a systems smoke test only",
@@ -92,6 +99,11 @@ def main() -> int:
     project_root = Path(__file__).resolve().parents[1]
     train_script = openpi_train_script()
     training_provenance = build_training_provenance(project_root, train_script.parents[1])
+    validate_openpi_source_lock(
+        args.openpi_source_lock,
+        source_files=int(training_provenance["openpi_source_files"]),
+        source_sha256=str(training_provenance["openpi_source_sha256"]),
+    )
     init_params_files = None
     init_params_sha256 = None
     if args.init_params:

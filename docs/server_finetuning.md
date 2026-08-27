@@ -111,6 +111,16 @@ The three stages are deliberately separate:
    final stage-2 parameters on a replay-mixed hard-sample dataset (`3,000`
    steps, peak LR `2e-6`).
 
+Every formal stage first validates the external OpenPI checkout against
+`configs/openpi/pi05_source.lock.json`, before dataset hashing, JAX import, or
+GPU admission. The checked-in lock covers 72 files under `scripts/train.py`,
+`src/openpi`, `packages/openpi-client/src`, `pyproject.toml`, and `uv.lock`; its
+`sha256-path-bytes-v1` digest is
+`69f4822188aeab6f2a2a3dbf49458ba94b895c2b0892eda2bd055d42261b5390`.
+If any covered path or byte changes, the stage fails before allocating a GPU.
+Update this lock only as a deliberate experiment-version change, never while a
+three-stage run is in progress.
+
 The stage-3 repository must already mix failure-recovery examples with normal
 successful replay data. Do not train it on failures alone, which would cause
 catastrophic forgetting of nominal behavior.

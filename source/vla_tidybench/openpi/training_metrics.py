@@ -31,6 +31,46 @@ OPENPI_PROVENANCE_PATHS = (
     Path("pyproject.toml"),
     Path("uv.lock"),
 )
+SOURCE_TREE_DIGEST_ALGORITHM = "sha256-path-bytes-v1"
+
+
+def validate_openpi_source_lock(
+    lock_path: Path,
+    *,
+    source_files: int,
+    source_sha256: str,
+) -> dict[str, Any]:
+    """Validate the external OpenPI tree against the experiment's checked-in lock."""
+
+    lock_path = lock_path.expanduser().resolve()
+    try:
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read OpenPI source lock {lock_path}: {error}") from error
+    expected_paths = [path.as_posix() for path in OPENPI_PROVENANCE_PATHS]
+    if not isinstance(lock, dict):
+        raise ValueError(f"invalid OpenPI source lock schema: {lock_path}")
+    try:
+        schema_version = int(lock.get("schema_version", -1))
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"invalid OpenPI source lock schema: {lock_path}") from error
+    if schema_version != 1:
+        raise ValueError(f"invalid OpenPI source lock schema: {lock_path}")
+    if lock.get("digest_algorithm") != SOURCE_TREE_DIGEST_ALGORITHM:
+        raise ValueError(f"unsupported OpenPI source lock digest: {lock_path}")
+    if lock.get("paths") != expected_paths:
+        raise ValueError(f"OpenPI source lock paths disagree with the training fingerprint scope: {lock_path}")
+    try:
+        locked_files = int(lock.get("source_files", 0))
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"invalid OpenPI source file count in {lock_path}") from error
+    if locked_files != source_files or lock.get("source_sha256") != source_sha256:
+        raise ValueError(
+            "OpenPI source tree does not match the experiment lock: "
+            f"expected=({locked_files}, {lock.get('source_sha256')}), "
+            f"got=({source_files}, {source_sha256})"
+        )
+    return lock
 
 
 def lerobot_dataset_path(repo_id: str) -> Path:
