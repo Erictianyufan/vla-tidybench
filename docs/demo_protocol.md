@@ -15,6 +15,13 @@ test seeds are frozen.
 4. A run manifest records the Git commit, config hashes, checkpoint hash,
    dataset version, prompt, seed, simulator version and policy latency.
 
+The frozen atomic predicate version is
+`drawer_skill_v2_relative_stable`. It checks OPEN/CLOSE drawer travel, PICK
+lift relative to the episode's initial bottle height plus a closed gripper,
+PLACE containment plus gripper release, and bottle retention while closing.
+Formal acceptance requires five consecutive successful 20-Hz states; a
+single transient contact or threshold crossing is not a success.
+
 ## Storyboard (approximately 90–150 seconds)
 
 | Time | Content | Evidence rule |

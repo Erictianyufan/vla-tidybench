@@ -325,7 +325,9 @@ flowchart LR
 - **FSM（Finite State Machine，有限状态机）**：管理单个技能内部的阶段。例如 PICK 中的靠近、下降、闭爪和抬升。
 - **TaskGraph（任务图）**：管理完整技能之间的顺序与条件，例如 `OPEN → PICK → PLACE → CLOSE`。
 - **Waypoint（路径点）**：末端执行器希望到达的中间目标位姿。
-- **Success Predicate（成功判据）**：独立于训练损失的物理布尔条件，例如抽屉打开超过阈值、药瓶被稳定抬起。
+- **Success Predicate（成功判据）**：独立于训练损失的物理布尔条件。正式评估使用版本化的
+  `drawer_skill_v2_relative_stable`：PICK 相对初始高度抬升并保持闭爪，PLACE 入柜并释放，CLOSE
+  在关门时还要确认药瓶留在抽屉坐标系内；判据必须连续保持 5 个 20 Hz 控制步。
 
 ```mermaid
 flowchart TD
@@ -340,7 +342,7 @@ flowchart TD
 - 能说明真值教师为什么能自动生成数据，也能说明它为什么不是最终部署策略。
 - 能解释低 imitation loss 不等于物理任务成功。
 
-对应文件：[`../scripts/collect_scripted_drawer.py`](../scripts/collect_scripted_drawer.py)、[`data_collection.md`](data_collection.md)、[`../source/vla_tidybench/task_graph.py`](../source/vla_tidybench/task_graph.py)。
+对应文件：[`../scripts/collect_scripted_drawer.py`](../scripts/collect_scripted_drawer.py)、[`data_collection.md`](data_collection.md)、[`../source/vla_tidybench/task_graph.py`](../source/vla_tidybench/task_graph.py)、[`../source/vla_tidybench/task_metrics.py`](../source/vla_tidybench/task_metrics.py)。
 
 ## 10. HDF5、物理回放与 Mimic
 

@@ -81,6 +81,7 @@ _startup_mark("isaac_utils")
 from vla_tidybench.isaac import TidyBenchDrawerEnvCfg, TidyBenchDrawerShowcaseEnvCfg  # noqa: E402
 from vla_tidybench.policy_bridge.action_adapter import ActionAdapter  # noqa: E402
 from vla_tidybench.policy_bridge.websocket_client import PolicyClient  # noqa: E402
+from vla_tidybench.task_metrics import drawer_skill_success  # noqa: E402
 
 _startup_mark("drawer_cfg")
 
@@ -93,6 +94,26 @@ PROMPTS = {
     "close": "close the top drawer",
     "full": "put the medicine bottle into the top drawer and close it",
 }
+
+PLACE_HELD_JOINT_POS = {
+    "panda_joint1": 0.20995605,
+    "panda_joint2": -1.4162296,
+    "panda_joint3": -0.45338604,
+    "panda_joint4": -2.3953204,
+    "panda_joint5": -0.24656539,
+    "panda_joint6": 2.636889,
+    "panda_joint7": -1.0277694,
+    "panda_finger_joint1": 0.02456491,
+    "panda_finger_joint2": 0.02480536,
+}
+PLACE_HELD_OBJECT_POSE = (
+    (0.24361168, -0.24285677, 0.80261046),
+    (-0.73046213, -0.19504146, 0.26132822, 0.60007614),
+)
+CLOSE_OBJECT_POSE = (
+    (0.61, -0.10684, 0.73107),
+    (-0.00772, -0.00638, 0.07677, 0.997),
+)
 
 
 def skill_for_phase(phase: Phase) -> str:
@@ -164,6 +185,8 @@ class DrawerTeacher:
         self.drawer_hold_target = None
         self.pick_jitter = self.rng.uniform(-0.003, 0.003, size=2)
         self.place_jitter = self.rng.uniform(-0.006, 0.006, size=2)
+        self.initial_drawer = self._drawer_pos()
+        self.initial_object_xyz = self._object()[0, :3].detach().cpu().numpy().copy()
 
     def _set_phase(self, phase: Phase) -> None:
         if phase is not self.phase:
@@ -227,7 +250,7 @@ class DrawerTeacher:
         if self.skill == "pick":
             return Phase.PICK_ABOVE
         if self.skill == "place":
-            return Phase.PICK_ABOVE
+            return Phase.PLACE_ABOVE
         return Phase.CLOSE_APPROACH
 
     def _after_open(self) -> Phase:
@@ -539,15 +562,17 @@ class DrawerTeacher:
         return bool(obj[2] > 0.68 and obj[2] < 0.86 and obj[0] > handle_x + 0.023 and abs(obj[1]) < 0.26)
 
     def success(self) -> bool:
-        if self.skill == "open":
-            return self._drawer_pos() >= 0.30
-        if self.skill == "pick":
-            return float(self._object()[0, 2]) >= 0.12
-        if self.skill == "place":
-            return self._object_in_drawer()
-        if self.skill == "close":
-            return self._drawer_pos() <= 0.04
-        return self._drawer_pos() <= 0.04 and self._object_in_drawer()
+        obj = self._object()[0, :3]
+        fingers = self.env.scene["robot"].data.joint_pos.torch[0, -2:]
+        return drawer_skill_success(
+            self.skill,
+            initial_drawer_m=self.initial_drawer,
+            initial_object_xyz=self.initial_object_xyz,
+            drawer_m=self._drawer_pos(),
+            object_xyz=obj.detach().cpu().numpy(),
+            handle_x=float(self._handle()[0, 0]),
+            finger_positions=fingers.detach().cpu().numpy(),
+        )
 
 
 def make_cfg() -> TidyBenchDrawerEnvCfg:
@@ -564,14 +589,18 @@ def make_cfg() -> TidyBenchDrawerEnvCfg:
         cfg.observations.policy.wrist_cam = None
         cfg.image_obs_list = []
         cfg.num_rerenders_on_reset = 0
-    if args_cli.skill in ("place", "close"):
+    if args_cli.skill in ("pick", "place", "close"):
         # This is part of the environment's reset state so RecorderManager
         # serializes the exact prerequisite state and physical replay can
         # reproduce the episode without an out-of-band teleport.
-        cfg.scene.cabinet.init_state.joint_pos["drawer_top_joint"] = 0.36
+        cfg.scene.cabinet.init_state.joint_pos["drawer_top_joint"] = 0.39 if args_cli.skill == "place" else 0.36
     if args_cli.skill == "place":
+        cfg.scene.robot.init_state.joint_pos = PLACE_HELD_JOINT_POS
+        cfg.scene.target_object.init_state.pos, cfg.scene.target_object.init_state.rot = PLACE_HELD_OBJECT_POSE
         cfg.scene.cabinet.actuators["drawers"].stiffness = 10000.0
         cfg.scene.cabinet.actuators["drawers"].damping = 500.0
+    elif args_cli.skill == "close":
+        cfg.scene.target_object.init_state.pos, cfg.scene.target_object.init_state.rot = CLOSE_OBJECT_POSE
     cfg.recorders = ActionStateRecorderManagerCfg()
     cfg.recorders.dataset_export_dir_path = str(output.parent)
     cfg.recorders.dataset_filename = output.stem

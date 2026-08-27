@@ -233,6 +233,17 @@ make pi05-eval-suite \
   EVAL_DATA_ROOT=/absolute/path/raw
 ```
 
+Formal rollouts use success predicate
+`drawer_skill_v2_relative_stable`. OPEN and CLOSE must reach their drawer
+thresholds; PICK must lift the bottle at least `0.08 m` relative to the frozen
+context while the gripper is closed; PLACE requires the bottle inside the open
+drawer and the gripper released; CLOSE additionally requires the bottle to
+remain in the moving drawer frame. Every predicate must remain true for five
+consecutive 20-Hz control steps. The rollout records the initial/final drawer,
+bottle and gripper state, and the summarizer rejects older or missing predicate
+versions, recomputes terminal success from those states, and rejects a forged or
+inconsistent `success` label instead of silently mixing incomparable results.
+
 Override `MIN_SUCCESS_RATE` or `MAX_P95_INFER_MS` only when documenting a
 different acceptance profile. The report is written to
 `$VLA_TIDYBENCH_DATA/eval/pi05-formal/evaluation.json`.

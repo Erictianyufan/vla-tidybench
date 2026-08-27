@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import h5py
 import numpy as np
 import pytest
-
+from vla_tidybench.task_metrics import FORMAL_SUCCESS_HOLD_STEPS, SUCCESS_PREDICATE_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("summarize_pi05_eval", ROOT / "scripts/summarize_pi05_eval.py")
@@ -34,6 +34,23 @@ def write_rollout(
     policy: str = "pi0.5-drawer-expert",
     residual_weight: float = 0.0,
 ) -> None:
+    initial_drawer = 0.36
+    initial_object = np.asarray([0.20, -0.20, 0.066], dtype=np.float32)
+    final_drawer = initial_drawer
+    final_object = initial_object.copy()
+    final_gripper_width = 0.08
+    final_handle_x = 0.29
+    if success and skill == "open":
+        final_drawer = 0.31
+    elif success and skill == "pick":
+        final_object = np.asarray([0.20, -0.20, 0.185], dtype=np.float32)
+        final_gripper_width = 0.048
+    elif success and skill == "place":
+        final_object = np.asarray([0.325, -0.20, 0.712], dtype=np.float32)
+    elif success and skill == "close":
+        initial_object = np.asarray([0.61, -0.107, 0.731], dtype=np.float32)
+        final_drawer = 0.001
+        final_object = np.asarray([0.96, -0.107, 0.712], dtype=np.float32)
     path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(path, "w") as output:
         output.attrs["format_version"] = 1
@@ -45,6 +62,15 @@ def write_rollout(
         output.attrs["policy_residual_weight"] = residual_weight
         output.attrs["initial_state_file"] = f"/data/drawer_{skill}_formal.hdf5"
         output.attrs["initial_state_episode"] = f"demo_{seed}"
+        output.attrs["success_predicate_version"] = SUCCESS_PREDICATE_VERSION
+        output.attrs["success_hold_steps_required"] = FORMAL_SUCCESS_HOLD_STEPS
+        output.attrs["success_hold_steps_observed"] = FORMAL_SUCCESS_HOLD_STEPS if success else 0
+        output.attrs["initial_drawer_m"] = initial_drawer
+        output.attrs["final_drawer_m"] = final_drawer
+        output.attrs["initial_object_xyz_m"] = initial_object
+        output.attrs["final_object_xyz_m"] = final_object
+        output.attrs["final_gripper_width_m"] = final_gripper_width
+        output.attrs["final_handle_x_m"] = final_handle_x
         output.create_dataset("actions", data=np.zeros((20, 7), dtype=np.float32))
         output.create_dataset("inference_ms", data=np.asarray([90.0, 110.0], dtype=np.float32))
 
@@ -84,6 +110,24 @@ def test_assisted_rollout_is_rejected_by_formal_gate(tmp_path: Path) -> None:
         residual_weight=0.02,
     )
     with pytest.raises(ValueError, match="assisted rollout"):
+        evaluation.read_episode(path, allow_assisted=False)
+
+
+def test_legacy_success_predicate_is_rejected_by_formal_gate(tmp_path: Path) -> None:
+    path = tmp_path / "open.hdf5"
+    write_rollout(path, skill="open", seed=1, success=True)
+    with h5py.File(path, "r+") as output:
+        del output.attrs["success_predicate_version"]
+    with pytest.raises(ValueError, match="success predicate"):
+        evaluation.read_episode(path, allow_assisted=False)
+
+
+def test_forged_success_label_is_rejected_by_state_audit(tmp_path: Path) -> None:
+    path = tmp_path / "pick.hdf5"
+    write_rollout(path, skill="pick", seed=1, success=True)
+    with h5py.File(path, "r+") as output:
+        output.attrs["final_object_xyz_m"] = output.attrs["initial_object_xyz_m"]
+    with pytest.raises(ValueError, match="disagrees with audited"):
         evaluation.read_episode(path, allow_assisted=False)
 
 
@@ -181,6 +225,9 @@ def test_closed_loop_records_selected_skill_and_checkpoint() -> None:
     assert 'parser.add_argument("--initial-state-episode")' in source
     assert "env.reset_to(context.get_initial_state()" in source
     assert 'output.attrs["initial_state_episode"]' in source
+    assert 'parser.add_argument("--success-hold-steps"' in source
+    assert 'output.attrs["success_predicate_version"]' in source
+    assert "drawer_skill_success(" in source
     assert 'output.create_dataset("inference_ms"' in source
 
 

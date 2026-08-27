@@ -5,13 +5,17 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import h5py
 import numpy as np
-
+from vla_tidybench.task_metrics import (
+    FORMAL_SUCCESS_HOLD_STEPS,
+    SUCCESS_PREDICATE_VERSION,
+    drawer_skill_success,
+)
 
 SKILLS = ("open", "pick", "place", "close")
 
@@ -27,11 +31,19 @@ class Episode:
     checkpoint: str
     residual_weight: float
     context: str
+    success_predicate: str
+    success_hold_steps: int
     inference_ms: np.ndarray
 
 
 def _text(value: object) -> str:
     return value.decode() if isinstance(value, bytes) else str(value)
+
+
+def _required_attr(source: h5py.File, name: str, path: Path):
+    if name not in source.attrs:
+        raise ValueError(f"missing {name} audit attribute in {path}")
+    return source.attrs[name]
 
 
 def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
@@ -47,6 +59,9 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
         context_file = _text(source.attrs.get("initial_state_file", ""))
         context_episode = _text(source.attrs.get("initial_state_episode", ""))
         context = f"{Path(context_file).name}::{context_episode}" if context_file and context_episode else ""
+        success_predicate = _text(source.attrs.get("success_predicate_version", ""))
+        recorded_success = bool(source.attrs.get("success", False))
+        success_hold_steps = int(source.attrs.get("success_hold_steps_observed", 0))
         assisted = residual_weight != 0.0 or "teacher" in policy.lower() or "+dls" in policy.lower()
         if assisted and not allow_assisted:
             raise ValueError(f"assisted rollout is not valid for autonomous policy evaluation: {path}")
@@ -54,6 +69,39 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
             raise ValueError(f"autonomous rollout does not identify its checkpoint: {path}")
         if not assisted and not context:
             raise ValueError(f"autonomous rollout does not identify its held-out initial-state context: {path}")
+        if not assisted and success_predicate != SUCCESS_PREDICATE_VERSION:
+            raise ValueError(
+                f"autonomous rollout uses success predicate {success_predicate!r}; "
+                f"expected {SUCCESS_PREDICATE_VERSION!r}: {path}"
+            )
+        if not assisted:
+            required_hold_steps = int(_required_attr(source, "success_hold_steps_required", path))
+            if required_hold_steps != FORMAL_SUCCESS_HOLD_STEPS:
+                raise ValueError(
+                    f"formal rollout requires {FORMAL_SUCCESS_HOLD_STEPS} success-hold steps, "
+                    f"got {required_hold_steps}: {path}"
+                )
+            initial_drawer = float(_required_attr(source, "initial_drawer_m", path))
+            final_drawer = float(_required_attr(source, "final_drawer_m", path))
+            initial_object = np.asarray(_required_attr(source, "initial_object_xyz_m", path), dtype=np.float64)
+            final_object = np.asarray(_required_attr(source, "final_object_xyz_m", path), dtype=np.float64)
+            gripper_width = float(_required_attr(source, "final_gripper_width_m", path))
+            final_handle_x = float(_required_attr(source, "final_handle_x_m", path))
+            terminal_success = drawer_skill_success(
+                skill,
+                initial_drawer_m=initial_drawer,
+                initial_object_xyz=initial_object,
+                drawer_m=final_drawer,
+                object_xyz=final_object,
+                handle_x=final_handle_x,
+                finger_positions=np.asarray([gripper_width / 2, gripper_width / 2]),
+            )
+            audited_success = terminal_success and success_hold_steps >= required_hold_steps
+            if recorded_success != audited_success:
+                raise ValueError(
+                    f"recorded success={recorded_success} disagrees with audited terminal state/hold "
+                    f"success={audited_success}: {path}"
+                )
         if "actions" not in source or "inference_ms" not in source:
             raise ValueError(f"missing actions/inference_ms in {path}")
         inference_ms = np.asarray(source["inference_ms"], dtype=np.float64)
@@ -65,12 +113,14 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
             path=path,
             skill=skill,
             seed=int(source.attrs.get("seed", -1)),
-            success=bool(source.attrs.get("success", False)),
+            success=recorded_success,
             steps=int(source["actions"].shape[0]),
             policy=policy,
             checkpoint=checkpoint,
             residual_weight=residual_weight,
             context=context,
+            success_predicate=success_predicate,
+            success_hold_steps=success_hold_steps,
             inference_ms=inference_ms,
         )
 
@@ -127,7 +177,7 @@ def summarize(
     used = [episode for episode in episodes if episode.skill in required_skills]
     return {
         "schema_version": 1,
-        "created_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "created_at_utc": dt.datetime.now(dt.UTC).isoformat(),
         "input_root": str(input_root.resolve()),
         "autonomous_only": all(episode.residual_weight == 0.0 for episode in used),
         "policy": policies[0] if len(policies) == 1 else None,
@@ -153,6 +203,8 @@ def summarize(
                 "skill": episode.skill,
                 "seed": episode.seed,
                 "context": episode.context,
+                "success_predicate": episode.success_predicate,
+                "success_hold_steps": episode.success_hold_steps,
                 "success": episode.success,
                 "steps": episode.steps,
                 "mean_infer_ms": float(np.mean(episode.inference_ms)) if episode.inference_ms.size else None,

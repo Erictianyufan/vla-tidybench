@@ -116,3 +116,19 @@ strict replay at 7/7:
 
 This is a smoke-test dataset, not the final training corpus. The checked-in
 manifest is the source of truth for hashes, counts and QA decisions.
+
+## Drawer atomic-skill prerequisites
+
+`scripts/collect_scripted_drawer.py` records each atomic command from the
+state in which that command is meaningful:
+
+- OPEN: drawer closed, medicine bottle on the table;
+- PICK: drawer open to `0.36 m`, medicine bottle on the table;
+- PLACE: drawer open to `0.39 m`, medicine bottle already held by the Franka;
+- CLOSE: drawer open to `0.36 m`, medicine bottle already inside it.
+
+These states are part of the environment reset configuration, so the recorder
+stores them in each HDF5 episode's `initial_state`; replay and evaluation do not
+depend on an unrecorded teleport. Formal success uses the versioned predicate
+in `source/vla_tidybench/task_metrics.py`. Simulator truth is used only for
+teacher control and metrics, never for policy observations.

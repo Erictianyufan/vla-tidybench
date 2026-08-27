@@ -21,6 +21,7 @@ parser.add_argument("--prompt", help="defaults to the canonical prompt for --ski
 parser.add_argument("--skill", choices=("open", "pick", "place", "close"), default="open")
 parser.add_argument("--max-steps", type=int, default=360)
 parser.add_argument("--execute-steps", type=int, default=4)
+parser.add_argument("--success-hold-steps", type=int, default=5)
 parser.add_argument("--seed", type=int, default=2026)
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--initial-state-file", type=Path)
@@ -59,6 +60,8 @@ if (args_cli.initial_state_file is None) != (args_cli.initial_state_episode is N
     parser.error("--initial-state-file and --initial-state-episode must be provided together")
 if args_cli.initial_state_file is not None and not args_cli.initial_state_file.is_file():
     parser.error(f"initial-state dataset not found: {args_cli.initial_state_file}")
+if min(args_cli.max_steps, args_cli.execute_steps, args_cli.success_hold_steps) < 1:
+    parser.error("max, execute, and success-hold step counts must be positive")
 if args_cli.dls_contact_recovery and args_cli.teacher_preview:
     parser.error("--dls-contact-recovery and --teacher-preview are mutually exclusive")
 if args_cli.dls_contact_recovery and skill != "open":
@@ -77,6 +80,7 @@ from vla_tidybench.isaac import TidyBenchDrawerEnvCfg, TidyBenchDrawerShowcaseEn
 from vla_tidybench.policy_bridge.action_adapter import ActionAdapter  # noqa: E402
 from vla_tidybench.policy_bridge.safety_guard import SafetyGuard  # noqa: E402
 from vla_tidybench.policy_bridge.websocket_client import PolicyClient  # noqa: E402
+from vla_tidybench.task_metrics import SUCCESS_PREDICATE_VERSION, drawer_skill_success  # noqa: E402
 
 
 def _numpy(value):
@@ -119,6 +123,8 @@ def main() -> int:
     latencies: list[float] = []
     policy_metadata: dict[str, object] = {}
     success = False
+    success_streak = 0
+    max_success_streak = 0
     try:
         env.reset(seed=args_cli.seed)
         if args_cli.initial_state_file is not None:
@@ -147,6 +153,15 @@ def main() -> int:
             )
             for _ in range(3):
                 env.sim.render()
+        cabinet = env.scene["cabinet"]
+        robot = env.scene["robot"]
+        target_object = env.scene["target_object"]
+        drawer = float(cabinet.data.joint_pos.torch[0, drawer_idx])
+        obj = _numpy(target_object.data.root_pos_w)[0, :3].astype(np.float32)
+        fingers = _numpy(robot.data.joint_pos)[0, -2:].astype(np.float32)
+        handle_x = float(env.scene["cabinet_frame"].data.target_pos_w.torch[0, 0, 0])
+        initial_drawer = drawer
+        initial_object = obj.copy()
         client_context = (
             None
             if args_cli.teacher_preview
@@ -190,7 +205,7 @@ def main() -> int:
                     response = client_context.infer(request)
                     latencies.append((time.perf_counter() - started) * 1000.0)
                     chunk = np.asarray(response["actions"], dtype=np.float32)
-                if chunk.ndim != 2 or chunk.shape[1] != 7 or not np.isfinite(chunk).all():
+                if chunk.ndim != 2 or chunk.shape[0] < 1 or chunk.shape[1] != 7 or not np.isfinite(chunk).all():
                     raise ValueError(f"malformed action chunk {chunk.shape}")
                 for physical in chunk[: args_cli.execute_steps]:
                     proposed = physical.copy()
@@ -218,27 +233,29 @@ def main() -> int:
                         frames_hero.append(hero)
                     actions_executed.append(executed)
                     step += 1
-                    drawer = float(env.scene["cabinet"].data.joint_pos.torch[0, drawer_idx])
-                    obj = env.scene["target_object"].data.root_pos_w.torch[0]
-                    if skill == "open":
-                        success = drawer >= 0.30
-                    elif skill == "pick":
-                        success = float(obj[2]) >= 0.12
-                    elif skill == "place":
-                        handle_x = env.scene["cabinet_frame"].data.target_pos_w.torch[0, 0, 0]
-                        success = bool(
-                            obj[2] > 0.68
-                            and obj[2] < 0.86
-                            and obj[0] > handle_x + 0.023
-                            and abs(obj[1]) < 0.26
-                        )
-                    elif skill == "close":
-                        teacher_length = 0 if teacher_actions is None else len(teacher_actions)
-                        success = drawer <= 0.04 and step >= min(40, teacher_length)
-                        if success:
-                            break
+                    drawer = float(cabinet.data.joint_pos.torch[0, drawer_idx])
+                    obj = _numpy(target_object.data.root_pos_w)[0, :3].astype(np.float32)
+                    fingers = _numpy(robot.data.joint_pos)[0, -2:].astype(np.float32)
+                    handle_x = float(env.scene["cabinet_frame"].data.target_pos_w.torch[0, 0, 0])
+                    instant_success = drawer_skill_success(
+                        skill,
+                        initial_drawer_m=initial_drawer,
+                        initial_object_xyz=initial_object,
+                        drawer_m=drawer,
+                        object_xyz=obj,
+                        handle_x=handle_x,
+                        finger_positions=fingers,
+                    )
+                    if skill == "close" and step < 40:
+                        instant_success = False
+                    success_streak = success_streak + 1 if instant_success else 0
+                    max_success_streak = max(max_success_streak, success_streak)
+                    success = success_streak >= args_cli.success_hold_steps
+                    if success:
+                        break
                 print(
-                    f"step={step} drawer={drawer:.3f} infer_ms={latencies[-1]:.1f} success={success}",
+                    f"step={step} drawer={drawer:.3f} infer_ms={latencies[-1]:.1f} "
+                    f"success_streak={success_streak}/{args_cli.success_hold_steps} success={success}",
                     flush=True,
                 )
                 if success:
@@ -269,6 +286,15 @@ def main() -> int:
             output.attrs["execute_steps"] = args_cli.execute_steps
             output.attrs["max_steps"] = args_cli.max_steps
             output.attrs["success"] = success
+            output.attrs["success_predicate_version"] = SUCCESS_PREDICATE_VERSION
+            output.attrs["success_hold_steps_required"] = args_cli.success_hold_steps
+            output.attrs["success_hold_steps_observed"] = max_success_streak
+            output.attrs["initial_drawer_m"] = initial_drawer
+            output.attrs["final_drawer_m"] = drawer
+            output.attrs["initial_object_xyz_m"] = initial_object
+            output.attrs["final_object_xyz_m"] = obj
+            output.attrs["final_gripper_width_m"] = float(fingers.sum())
+            output.attrs["final_handle_x_m"] = handle_x
             output.attrs["mean_infer_ms"] = float(np.mean(latencies)) if latencies else -1.0
             output.attrs["policy_residual_weight"] = (
                 args_cli.policy_residual_weight if recovery_actions is not None else 0.0

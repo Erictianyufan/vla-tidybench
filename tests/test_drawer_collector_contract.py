@@ -47,6 +47,10 @@ def test_place_path_has_explicit_vertical_clearance() -> None:
 
 def test_skill_prerequisites_are_part_of_recorded_reset_state() -> None:
     text = _source(COLLECTOR)
-    assert 'if args_cli.skill in ("place", "close")' in text
-    assert 'joint_pos["drawer_top_joint"] = 0.36' in text
+    assert 'if args_cli.skill in ("pick", "place", "close")' in text
+    assert '0.39 if args_cli.skill == "place" else 0.36' in text
+    assert "PLACE_HELD_JOINT_POS" in text
+    assert "PLACE_HELD_OBJECT_POSE" in text
+    assert "CLOSE_OBJECT_POSE" in text
+    assert "return Phase.PLACE_ABOVE" in text
     assert "reset_to" not in text

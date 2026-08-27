@@ -24,6 +24,7 @@ import gymnasium as gym  # noqa: E402
 import torch  # noqa: E402
 from isaaclab.utils.datasets import HDF5DatasetFileHandler  # noqa: E402
 from vla_tidybench.isaac import TidyBenchDrawerEnvCfg  # noqa: E402
+from vla_tidybench.task_metrics import drawer_skill_success  # noqa: E402
 
 
 def make_cfg() -> TidyBenchDrawerEnvCfg:
@@ -40,23 +41,27 @@ def make_cfg() -> TidyBenchDrawerEnvCfg:
     return cfg
 
 
-def succeeded(env, skill: str) -> tuple[bool, str]:
+def succeeded(env, skill: str, initial_drawer: float, initial_object) -> tuple[bool, str]:
     cabinet = env.scene["cabinet"]
     drawer_idx = cabinet.find_joints("drawer_top_joint")[0][0]
     drawer_q = float(cabinet.data.joint_pos.torch[0, drawer_idx])
     obj = env.scene["target_object"].data.root_pos_w.torch[0]
     handle = env.scene["cabinet_frame"].data.target_pos_w.torch[0, 0]
-    object_in_drawer = bool(obj[2] > 0.68 and obj[2] < 0.86 and obj[0] > handle[0] + 0.023 and abs(obj[1]) < 0.26)
-    picked = float(obj[2]) >= 0.12
-    checks = {
-        "open": drawer_q >= 0.30,
-        "pick": picked,
-        "place": object_in_drawer,
-        "close": drawer_q <= 0.04,
-        "full": drawer_q <= 0.04 and object_in_drawer,
-    }
-    detail = f"drawer={drawer_q:.3f}, object={obj.detach().cpu().tolist()}, in_drawer={object_in_drawer}"
-    return checks[skill], detail
+    fingers = env.scene["robot"].data.joint_pos.torch[0, -2:]
+    ok = drawer_skill_success(
+        skill,
+        initial_drawer_m=initial_drawer,
+        initial_object_xyz=initial_object.detach().cpu().numpy(),
+        drawer_m=drawer_q,
+        object_xyz=obj.detach().cpu().numpy(),
+        handle_x=float(handle[0]),
+        finger_positions=fingers.detach().cpu().numpy(),
+    )
+    detail = (
+        f"drawer={drawer_q:.3f}, object={obj.detach().cpu().tolist()}, "
+        f"gripper_width={float(fingers.sum()):.3f}"
+    )
+    return ok, detail
 
 
 def main() -> int:
@@ -67,6 +72,7 @@ def main() -> int:
         raise RuntimeError("dataset contains no episodes")
 
     env = gym.make("Isaac-Open-Drawer-Franka-IK-Rel-v0", cfg=make_cfg()).unwrapped
+    drawer_idx = env.scene["cabinet"].find_joints("drawer_top_joint")[0][0]
     passed = 0
     try:
         env.reset()
@@ -76,11 +82,13 @@ def main() -> int:
                 if args_cli.reset_sim_buffer_each_episode:
                     env.sim.reset()
                 env.reset_to(episode.get_initial_state(), torch.tensor([0], device=env.device), is_relative=True)
+                initial_drawer = float(env.scene["cabinet"].data.joint_pos.torch[0, drawer_idx])
+                initial_object = env.scene["target_object"].data.root_pos_w.torch[0, :3].clone()
                 steps = 0
                 while (action := episode.get_next_action()) is not None:
                     env.step(action.unsqueeze(0) if action.ndim == 1 else action)
                     steps += 1
-                ok, detail = succeeded(env, args_cli.skill)
+                ok, detail = succeeded(env, args_cli.skill, initial_drawer, initial_object)
                 passed += int(ok)
                 print(f"episode={index} name={name} steps={steps} success={ok} {detail}", flush=True)
     finally:
