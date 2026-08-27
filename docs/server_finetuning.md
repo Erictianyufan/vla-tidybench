@@ -176,7 +176,11 @@ PI05_HARD_DATASET_REPO=scuee_user06/vla_tidybench_drawer_v1_hard_mix \
 This writes
 `$VLA_TIDYBENCH_DATA/logs/pi05-three-stage-status.json` with the active stage,
 latest complete checkpoint per stage, latest tqdm step/rate, detected error
-signals, selected-GPU memory, training PID, and any foreign compute PIDs. A
+signals, selected-GPU memory, training PID, and any foreign compute PIDs. It
+also discovers the non-GPU launcher, outer runner, and stage worker from the
+process table, records their parent PID and elapsed time, identifies workers
+waiting before GPU allocation, and reports the most recent GPU-preflight
+`waiting` or `ready` event. A
 stage reports `training_completion_verified: true` only after its completion
 JSON, expected dataset and embedded normalization asset, clean provenance, and
 the complete checkpoint tree digest agree. `all_stages_complete` and

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -129,6 +130,18 @@ def test_progress_parser_uses_latest_tqdm_record() -> None:
     }
 
 
+def test_preflight_parser_reports_latest_state() -> None:
+    text = (
+        "gpu_preflight waiting elapsed_s=0 gpu=0 used_mib=900 pids=[2]\n"
+        "gpu_preflight ready gpu=0 used_mib=10\n"
+    )
+
+    assert reporter.parse_gpu_preflight(text) == {
+        "status": "ready",
+        "message": "gpu_preflight ready gpu=0 used_mib=10",
+    }
+
+
 def test_metric_coverage_discloses_recovered_and_native_records(tmp_path: Path) -> None:
     path = tmp_path / "train_metrics.jsonl"
     path.write_text(
@@ -180,3 +193,27 @@ def test_gpu_report_separates_training_and_foreign_pids(monkeypatch) -> None:
     assert report["training_pids"] == [100]
     assert report["foreign_compute_pids"] == [200]
     assert report["resource_conflict"] is True
+
+
+def test_experiment_process_report_includes_non_gpu_worker(monkeypatch) -> None:
+    stdout = "\n".join(
+        (
+            "100 1 50 make pi05-three-stage-train MAIN_DATASET_REPO=owner/data",
+            "101 100 49 python scripts/run_pi05_three_stage.py --stage all",
+            "102 101 48 python scripts/train_drawer_pi05.py --mode lora",
+            "999 1 10 python unrelated.py",
+        )
+    )
+    monkeypatch.setattr(
+        reporter.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess([], 0, stdout=stdout, stderr=""),
+    )
+
+    report = reporter.experiment_process_report(set())
+
+    assert report["launcher_pids"] == [100]
+    assert report["runner_pids"] == [101]
+    assert report["worker_pids"] == [102]
+    assert report["waiting_worker_pids"] == [102]
+    assert len(report["processes"]) == 3

@@ -29,6 +29,11 @@ PROGRESS_PATTERN = re.compile(
     r"\s+rate:(?P<rate>[0-9.]+)s/it"
 )
 ERROR_PATTERN = re.compile(r"traceback|exception|out of memory|\bnan\b|killed", re.IGNORECASE)
+EXPERIMENT_PROCESS_MARKERS = {
+    "launcher": "make pi05-three-stage-train",
+    "runner": "scripts/run_pi05_three_stage.py",
+    "worker": "scripts/train_drawer_pi05.py",
+}
 
 
 def data_root() -> Path:
@@ -170,6 +175,18 @@ def parse_latest_progress(log_text: str) -> dict[str, object] | None:
     }
 
 
+def parse_gpu_preflight(log_text: str) -> dict[str, str] | None:
+    events = [
+        ("waiting" if "gpu_preflight waiting" in line else "ready", line.strip())
+        for line in log_text.splitlines()
+        if "gpu_preflight waiting" in line or "gpu_preflight ready" in line
+    ]
+    if not events:
+        return None
+    status, message = events[-1]
+    return {"status": status, "message": message}
+
+
 def process_commands(pids: set[int]) -> dict[int, str]:
     if not pids:
         return {}
@@ -185,6 +202,50 @@ def process_commands(pids: set[int]) -> dict[int, str]:
         if len(fields) == 2:
             commands[int(fields[0])] = fields[1]
     return commands
+
+
+def experiment_process_report(gpu_training_pids: set[int]) -> dict[str, object]:
+    result = subprocess.run(
+        ["ps", "-eo", "pid=,ppid=,etimes=,args="],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    processes: list[dict[str, object]] = []
+    for line in result.stdout.splitlines():
+        fields = line.strip().split(maxsplit=3)
+        if len(fields) != 4:
+            continue
+        pid_text, parent_text, elapsed_text, command = fields
+        role = next(
+            (role for role, marker in EXPERIMENT_PROCESS_MARKERS.items() if marker in command),
+            None,
+        )
+        if role is None:
+            continue
+        processes.append(
+            {
+                "pid": int(pid_text),
+                "parent_pid": int(parent_text),
+                "elapsed_seconds": int(elapsed_text),
+                "role": role,
+                "gpu_active": int(pid_text) in gpu_training_pids,
+                "command": command,
+            }
+        )
+    processes.sort(key=lambda item: int(item["pid"]))
+    return {
+        "present": bool(processes),
+        "launcher_pids": [item["pid"] for item in processes if item["role"] == "launcher"],
+        "runner_pids": [item["pid"] for item in processes if item["role"] == "runner"],
+        "worker_pids": [item["pid"] for item in processes if item["role"] == "worker"],
+        "waiting_worker_pids": [
+            item["pid"]
+            for item in processes
+            if item["role"] == "worker" and not item["gpu_active"]
+        ],
+        "processes": processes,
+    }
 
 
 def gpu_report(indices: tuple[int, ...], usage: dict[int, GPUUsage]) -> dict[str, object]:
@@ -253,6 +314,7 @@ def main() -> int:
         if log_path and log_path.is_file()
         else None
     )
+    gpu = gpu_report(tuple(args.gpus), inspect_gpu_usage())
     report = {
         "schema_version": 1,
         "created_at_utc": now.isoformat(),
@@ -263,8 +325,10 @@ def main() -> int:
         "log_mtime_utc": log_mtime.isoformat() if log_mtime else None,
         "log_age_seconds": round((now - log_mtime).total_seconds(), 1) if log_mtime else None,
         "latest_progress": parse_latest_progress(log_text),
+        "gpu_preflight": parse_gpu_preflight(log_text),
         "error_signals": errors,
-        "gpu": gpu_report(tuple(args.gpus), inspect_gpu_usage()),
+        "experiment_processes": experiment_process_report(set(gpu["training_pids"])),
+        "gpu": gpu,
     }
     rendered = json.dumps(report, indent=2)
     if args.output:
