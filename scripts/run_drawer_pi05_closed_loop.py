@@ -48,8 +48,8 @@ args_cli = parser.parse_args()
 skill = args_cli.teacher_skill or args_cli.skill
 skill_prompts = {
     "open": "open the top drawer",
-    "pick": "pick up the tomato soup can",
-    "place": "put the tomato soup can into the top drawer",
+    "pick": "pick up the medicine bottle",
+    "place": "put the medicine bottle into the top drawer",
     "close": "close the top drawer",
 }
 args_cli.prompt = args_cli.prompt or skill_prompts[skill]

@@ -101,6 +101,9 @@ def test_mixed_checkpoints_fail_the_gate(tmp_path: Path) -> None:
 def test_closed_loop_records_selected_skill_and_checkpoint() -> None:
     source = (ROOT / "scripts/run_drawer_pi05_closed_loop.py").read_text(encoding="utf-8")
     assert 'parser.add_argument("--skill"' in source
+    assert '"pick": "pick up the medicine bottle"' in source
+    assert '"place": "put the medicine bottle into the top drawer"' in source
+    assert "tomato soup can" not in source
     assert 'output.attrs["skill"] = skill' in source
     assert 'output.attrs["policy_checkpoint"]' in source
     assert 'output.create_dataset("inference_ms"' in source
