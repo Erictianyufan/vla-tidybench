@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 from dataclasses import dataclass, replace
 from pathlib import Path
+
+from vla_tidybench.openpi.deployment import checkpoint_fingerprint, validate_training_completion
 
 MVP_REPO = "erictianyufan/vla_tidybench_drawer_four_skill_mvp"
 FULL_CONFIG_NAME = "pi05_tidybench_drawer_four_skill_full"
@@ -87,6 +90,10 @@ def final_checkpoint(data_root: Path, stage: Stage) -> Path:
     return stage_run_dir(data_root, stage) / str(stage.steps - 1)
 
 
+def training_completion_path(data_root: Path, stage: Stage) -> Path:
+    return stage_run_dir(data_root, stage) / "training_completion.json"
+
+
 def checkpoint_complete(path: Path) -> bool:
     return all(
         required.is_file()
@@ -96,6 +103,34 @@ def checkpoint_complete(path: Path) -> bool:
             path / "params" / "manifest.ocdbt",
         )
     )
+
+
+def stage_completion_verified(data_root: Path, stage: Stage) -> bool:
+    """Return true only for a content-bound, provenance-verified final checkpoint."""
+
+    checkpoint = final_checkpoint(data_root, stage)
+    if not checkpoint_complete(checkpoint):
+        return False
+    completion_path = training_completion_path(data_root, stage)
+    if not completion_path.is_file():
+        return False
+    try:
+        completion = json.loads(completion_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"invalid training completion JSON: {completion_path}") from error
+    if not isinstance(completion, dict):
+        raise ValueError(f"training completion must be a JSON object: {completion_path}")
+    file_count, byte_count, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
+    validate_training_completion(
+        completion,
+        checkpoint=checkpoint,
+        checkpoint_sha256=checkpoint_sha256,
+        file_count=file_count,
+        byte_count=byte_count,
+        dataset_repo=stage.dataset_repo,
+        require_clean_provenance=stage.dataset_repo != "fake",
+    )
+    return True
 
 
 def resumable_checkpoint(run_dir: Path) -> Path | None:
@@ -153,11 +188,12 @@ def main() -> int:
     data_root = default_data_root()
     for stage in stages:
         run_dir = stage_run_dir(data_root, stage)
-        completed = checkpoint_complete(final_checkpoint(data_root, stage))
+        completed = stage_completion_verified(data_root, stage)
         if args.resume and completed:
             print(
                 f"stage={stage.number} status=complete action=skip "
-                f"checkpoint={final_checkpoint(data_root, stage)}",
+                f"checkpoint={final_checkpoint(data_root, stage)} "
+                f"completion={training_completion_path(data_root, stage)}",
                 flush=True,
             )
             continue
