@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+from vla_tidybench.openpi.deployment import checkpoint_fingerprint
+
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
     "report_pi05_experiment", ROOT / "scripts" / "report_pi05_experiment.py"
@@ -37,6 +39,77 @@ def test_stage_status_reports_only_complete_numeric_checkpoints(tmp_path: Path) 
     assert status["metrics_available"] is True
     assert status["metrics_records"] == 0
     assert status["training_completion_available"] is False
+    assert status["training_completion_verified"] is False
+
+
+def test_stage_status_verifies_content_bound_completion(tmp_path: Path) -> None:
+    run_root = tmp_path / "runs"
+    run_dir = run_root / "config" / "stage"
+    checkpoint = run_dir / "2"
+    write_checkpoint(checkpoint)
+    file_count, byte_count, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
+    (run_dir / "training_completion.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "verified": True,
+                "checkpoint": str(checkpoint.resolve()),
+                "final_step": 2,
+                "num_train_steps": 3,
+                "dataset_repo": "fake",
+                "checkpoint_digest_algorithm": "sha256-tree-v1",
+                "checkpoint_file_count": file_count,
+                "checkpoint_byte_count": byte_count,
+                "checkpoint_sha256": checkpoint_sha256,
+                "loss": 1.0,
+                "grad_norm": 2.0,
+                "param_norm": 3.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    status = reporter.stage_status(run_root, "stage", "config", 3, expected_dataset_repo="fake")
+
+    assert status["final_checkpoint_complete"] is True
+    assert status["training_completion_available"] is True
+    assert status["training_completion_verified"] is True
+    assert "training_completion_error" not in status
+
+
+def test_stage_status_rejects_tampered_completed_checkpoint(tmp_path: Path) -> None:
+    run_root = tmp_path / "runs"
+    run_dir = run_root / "config" / "stage"
+    checkpoint = run_dir / "2"
+    write_checkpoint(checkpoint)
+    file_count, byte_count, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
+    (run_dir / "training_completion.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "verified": True,
+                "checkpoint": str(checkpoint.resolve()),
+                "final_step": 2,
+                "num_train_steps": 3,
+                "dataset_repo": "fake",
+                "checkpoint_digest_algorithm": "sha256-tree-v1",
+                "checkpoint_file_count": file_count,
+                "checkpoint_byte_count": byte_count,
+                "checkpoint_sha256": checkpoint_sha256,
+                "loss": 1.0,
+                "grad_norm": 2.0,
+                "param_norm": 3.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (checkpoint / "params" / "manifest.ocdbt").write_text("tampered", encoding="utf-8")
+
+    status = reporter.stage_status(run_root, "stage", "config", 3, expected_dataset_repo="fake")
+
+    assert status["training_completion_available"] is True
+    assert status["training_completion_verified"] is False
+    assert "training_completion_error" in status
 
 
 def test_progress_parser_uses_latest_tqdm_record() -> None:

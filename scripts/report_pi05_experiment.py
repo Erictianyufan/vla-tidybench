@@ -11,7 +11,12 @@ import re
 import subprocess
 from pathlib import Path
 
-from vla_tidybench.openpi.deployment import REQUIRED_CHECKPOINT_FILES
+from vla_tidybench.openpi.deployment import (
+    REQUIRED_CHECKPOINT_FILES,
+    checkpoint_asset_id,
+    checkpoint_fingerprint,
+    validate_training_completion,
+)
 from vla_tidybench.openpi.gpu_preflight import GPUUsage, inspect_gpu_usage
 
 STAGES = (
@@ -70,7 +75,53 @@ def metric_coverage(path: Path) -> dict[str, object]:
     }
 
 
-def stage_status(run_root: Path, name: str, config: str, steps: int) -> dict[str, object]:
+def completion_status(
+    checkpoint: Path,
+    completion_path: Path,
+    *,
+    expected_dataset_repo: str | None,
+) -> dict[str, object]:
+    available = completion_path.is_file()
+    result: dict[str, object] = {
+        "training_completion_available": available,
+        "training_completion_verified": False,
+    }
+    if not checkpoint_complete(checkpoint) or not available:
+        return result
+    try:
+        completion = json.loads(completion_path.read_text(encoding="utf-8"))
+        if not isinstance(completion, dict):
+            raise ValueError("training completion must be a JSON object")
+        dataset_repo = expected_dataset_repo or str(completion.get("dataset_repo", ""))
+        if not dataset_repo:
+            raise ValueError("training completion has no dataset identity")
+        if dataset_repo != "fake" and checkpoint_asset_id(checkpoint) != dataset_repo:
+            raise ValueError("checkpoint normalization asset ID does not match the training dataset")
+        file_count, byte_count, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
+        validate_training_completion(
+            completion,
+            checkpoint=checkpoint,
+            checkpoint_sha256=checkpoint_sha256,
+            file_count=file_count,
+            byte_count=byte_count,
+            dataset_repo=dataset_repo,
+            require_clean_provenance=dataset_repo != "fake",
+        )
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+        result["training_completion_error"] = str(error)
+        return result
+    result["training_completion_verified"] = True
+    return result
+
+
+def stage_status(
+    run_root: Path,
+    name: str,
+    config: str,
+    steps: int,
+    *,
+    expected_dataset_repo: str | None = None,
+) -> dict[str, object]:
     run_dir = run_root / config / name
     numeric = sorted(
         (path for path in run_dir.iterdir() if path.is_dir() and path.name.isdigit())
@@ -89,7 +140,11 @@ def stage_status(run_root: Path, name: str, config: str, steps: int) -> dict[str
         "run_dir": str(run_dir.resolve()),
         "latest_complete_checkpoint": str(complete[-1].resolve()) if complete else None,
         "final_checkpoint_complete": checkpoint_complete(final),
-        "training_completion_available": completion.is_file(),
+        **completion_status(
+            final,
+            completion,
+            expected_dataset_repo=expected_dataset_repo,
+        ),
         **metric_coverage(metrics),
     }
 
@@ -165,6 +220,8 @@ def main() -> int:
     parser.add_argument("--run-root", type=Path, default=root / "checkpoints" / "openpi-runs")
     parser.add_argument("--log", type=Path)
     parser.add_argument("--gpus", nargs="+", type=int, default=[0, 1, 2])
+    parser.add_argument("--main-dataset-repo", default=os.environ.get("PI05_MAIN_DATASET_REPO"))
+    parser.add_argument("--hard-dataset-repo", default=os.environ.get("PI05_HARD_DATASET_REPO"))
     parser.add_argument("--output", type=Path)
     parser.add_argument("--fail-on-conflict", action="store_true")
     args = parser.parse_args()
@@ -177,8 +234,18 @@ def main() -> int:
     else:
         log_path = args.log.expanduser().resolve()
     log_text = log_path.read_text(encoding="utf-8", errors="replace") if log_path and log_path.is_file() else ""
-    stages = [stage_status(args.run_root.expanduser().resolve(), *stage) for stage in STAGES]
-    active = next((stage["name"] for stage in stages if not stage["final_checkpoint_complete"]), None)
+    run_root = args.run_root.expanduser().resolve()
+    stages = [
+        stage_status(
+            run_root,
+            *stage,
+            expected_dataset_repo=(
+                args.hard_dataset_repo if stage[0] == "stage3-hard-recovery" else args.main_dataset_repo
+            ),
+        )
+        for stage in STAGES
+    ]
+    active = next((stage["name"] for stage in stages if not stage["training_completion_verified"]), None)
     errors = [line.strip() for line in log_text.splitlines() if ERROR_PATTERN.search(line)][-20:]
     now = dt.datetime.now(dt.UTC)
     log_mtime = (
@@ -190,7 +257,7 @@ def main() -> int:
         "schema_version": 1,
         "created_at_utc": now.isoformat(),
         "active_stage": active,
-        "all_stages_complete": all(stage["final_checkpoint_complete"] for stage in stages),
+        "all_stages_complete": all(stage["training_completion_verified"] for stage in stages),
         "stages": stages,
         "log": str(log_path.resolve()) if log_path else None,
         "log_mtime_utc": log_mtime.isoformat() if log_mtime else None,

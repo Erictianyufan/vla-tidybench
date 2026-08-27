@@ -173,6 +173,8 @@ pi05-recover-stage1-metrics:
 pi05-experiment-status:
 	./scripts/run_openpi.sh scripts/report_pi05_experiment.py \
 		--gpus $${PI05_STATUS_GPUS:-0 1 2} \
+		$${PI05_MAIN_DATASET_REPO:+--main-dataset-repo "$${PI05_MAIN_DATASET_REPO}"} \
+		$${PI05_HARD_DATASET_REPO:+--hard-dataset-repo "$${PI05_HARD_DATASET_REPO}"} \
 		--output $${PI05_STATUS_REPORT:-$(VLA_TIDYBENCH_DATA)/logs/pi05-three-stage-status.json} \
 		$${PI05_STATUS_FLAG:-}
 
