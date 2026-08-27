@@ -75,6 +75,8 @@ def test_stage_status_verifies_content_bound_completion(tmp_path: Path) -> None:
     assert status["final_checkpoint_complete"] is True
     assert status["training_completion_available"] is True
     assert status["training_completion_verified"] is True
+    assert status["resumed"] is False
+    assert status["resume_checkpoint_step"] is None
     assert "training_completion_error" not in status
 
 

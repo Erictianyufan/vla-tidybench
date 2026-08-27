@@ -121,6 +121,15 @@ If any covered path or byte changes, the stage fails before allocating a GPU.
 Update this lock only as a deliberate experiment-version change, never while a
 three-stage run is in progress.
 
+A resumed segment hashes the exact checkpoint selected for restore and records
+that digest, the prior metric step, prior project commit, and whether the prior
+metric contained complete clean-project, OpenPI, initialization, and dataset
+provenance. These fields are carried into `training_completion.json`. This experiment's stage-1 checkpoint
+499 takeover deliberately reports incomplete parent provenance because its
+0–133 metrics were recovered from the legacy console log; the omission is not
+silently rewritten. A formal stage-3 deployment is stricter and rejects any
+resumed lineage whose parent provenance is incomplete.
+
 The stage-3 repository must already mix failure-recovery examples with normal
 successful replay data. Do not train it on failures alone, which would cause
 catastrophic forgetting of nominal behavior.

@@ -205,6 +205,34 @@ def test_runtime_openpi_must_match_training_source(tmp_path: Path) -> None:
         validate_openpi_runtime(deployment.training, source_files=72, source_sha256="b" * 64)
 
 
+def test_formal_deployment_rejects_incomplete_resume_parent(tmp_path: Path) -> None:
+    deployment = make_deployment(tmp_path)
+    training_path = deployment / "training_completion.json"
+    training = json.loads(training_path.read_text(encoding="utf-8"))
+    training.update(
+        {
+            "resumed": True,
+            "resume_checkpoint": "/runs/stage3/1999",
+            "resume_checkpoint_step": 1999,
+            "resume_checkpoint_digest_algorithm": CHECKPOINT_DIGEST_ALGORITHM,
+            "resume_checkpoint_file_count": 10,
+            "resume_checkpoint_byte_count": 20,
+            "resume_checkpoint_sha256": "b" * 64,
+            "resume_parent_metric_step": 1999,
+            "resume_parent_project_commit": PROJECT_COMMIT,
+            "resume_parent_provenance_complete": False,
+        }
+    )
+    training_path.write_text(json.dumps(training), encoding="utf-8")
+    manifest_path = deployment / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["training"]["sha256"] = hashlib.sha256(training_path.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="complete resume parent"):
+        load_deployment(deployment)
+
+
 def test_dataset_repo_must_match_embedded_normalization_assets(tmp_path: Path) -> None:
     deployment = make_deployment(tmp_path)
     manifest_path = deployment / "manifest.json"

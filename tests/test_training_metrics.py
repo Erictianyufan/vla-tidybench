@@ -9,6 +9,7 @@ from vla_tidybench.openpi.deployment import checkpoint_fingerprint
 from vla_tidybench.openpi.training_metrics import (
     OPENPI_PROVENANCE_PATHS,
     JsonlTrainingMetrics,
+    build_resume_provenance,
     lerobot_dataset_path,
     source_tree_fingerprint,
     validate_completed_training_run,
@@ -80,6 +81,27 @@ def test_resume_session_can_replay_steps_after_latest_checkpoint(tmp_path: Path)
     assert history[-1]["session_id"] != history[0]["session_id"]
 
 
+def test_resume_provenance_binds_checkpoint_and_prior_segment(tmp_path: Path) -> None:
+    run_dir = tmp_path / "stage1"
+    write_complete_checkpoint(run_dir / "499", "owner/data")
+    metrics_path = run_dir / "train_metrics.jsonl"
+    JsonlTrainingMetrics(
+        metrics_path,
+        {
+            **formal_metadata("owner/data", 500),
+            "openpi_source_files": 72,
+        },
+    ).log(payload(), step=498)
+
+    provenance = build_resume_provenance(run_dir, metrics_path)
+
+    assert provenance["resume_checkpoint_step"] == 499
+    assert provenance["resume_parent_metric_step"] == 498
+    assert provenance["resume_parent_project_commit"] == PROJECT_COMMIT
+    assert provenance["resume_parent_provenance_complete"] is True
+    assert len(str(provenance["resume_checkpoint_sha256"])) == 64
+
+
 def test_nonfinite_or_nonmonotonic_session_metrics_fail_fast(tmp_path: Path) -> None:
     logger = JsonlTrainingMetrics(tmp_path / "metrics.jsonl", {"experiment": "stage"})
     with pytest.raises(FloatingPointError, match="non-finite"):
@@ -132,6 +154,48 @@ def test_completed_training_run_binds_checkpoint_metrics_and_assets(tmp_path: Pa
     assert report["checkpoint_sha256"]
     completion_path = write_training_completion(run_dir, report)
     assert json.loads(completion_path.read_text(encoding="utf-8"))["verified"] is True
+
+
+def test_completed_training_run_preserves_resume_lineage(tmp_path: Path) -> None:
+    dataset_repo = "owner/data"
+    run_dir = tmp_path / "stage"
+    write_complete_checkpoint(run_dir / "2", dataset_repo)
+    metadata = {
+        **formal_metadata(dataset_repo, 3),
+        "resumed": True,
+        "resume_checkpoint": str(run_dir / "1"),
+        "resume_checkpoint_step": 1,
+        "resume_checkpoint_digest_algorithm": "sha256-tree-v1",
+        "resume_checkpoint_file_count": 4,
+        "resume_checkpoint_byte_count": 10,
+        "resume_checkpoint_sha256": "b" * 64,
+        "resume_parent_metric_step": 1,
+        "resume_parent_project_commit": "c" * 40,
+        "resume_parent_project_dirty": None,
+        "resume_parent_openpi_source_files": None,
+        "resume_parent_openpi_source_sha256": None,
+        "resume_parent_init_params_files": None,
+        "resume_parent_init_params_sha256": None,
+        "resume_parent_dataset_repo": None,
+        "resume_parent_dataset_digest_algorithm": None,
+        "resume_parent_dataset_files": None,
+        "resume_parent_dataset_bytes": None,
+        "resume_parent_dataset_sha256": None,
+        "resume_parent_provenance_complete": False,
+    }
+    metrics_path = run_dir / "train_metrics.jsonl"
+    JsonlTrainingMetrics(metrics_path, metadata).log(payload(), step=2)
+
+    report = validate_completed_training_run(
+        run_dir,
+        num_train_steps=3,
+        dataset_repo=dataset_repo,
+        metrics_path=metrics_path,
+    )
+
+    assert report["resumed"] is True
+    assert report["resume_checkpoint_step"] == 1
+    assert report["resume_parent_provenance_complete"] is False
 
 
 def test_completed_training_run_rejects_wrong_checkpoint_assets(tmp_path: Path) -> None:

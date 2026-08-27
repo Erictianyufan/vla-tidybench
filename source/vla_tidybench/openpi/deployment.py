@@ -127,6 +127,7 @@ def validate_training_completion(
     byte_count: int,
     dataset_repo: str,
     require_clean_provenance: bool = True,
+    require_complete_resume_lineage: bool = False,
 ) -> None:
     """Validate a content-bound completion report for one formal training stage."""
 
@@ -193,6 +194,71 @@ def validate_training_completion(
         value = _number(training.get(label), f"training {label}")
         if value < 0:
             raise ValueError(f"training completion has negative {label}")
+    resumed = training.get("resumed", False)
+    if not isinstance(resumed, bool):
+        raise ValueError("training completion resumed flag must be boolean")
+    if not resumed:
+        return
+    try:
+        resume_step = int(training.get("resume_checkpoint_step", -1))
+        resume_files = int(training.get("resume_checkpoint_file_count", 0))
+        resume_bytes = int(training.get("resume_checkpoint_byte_count", 0))
+        parent_metric_step = int(training.get("resume_parent_metric_step", -1))
+    except (TypeError, ValueError) as error:
+        raise ValueError("training completion has invalid resume lineage numbers") from error
+    resume_path = Path(str(training.get("resume_checkpoint", ""))).expanduser()
+    resume_digest = str(training.get("resume_checkpoint_sha256", ""))
+    parent_commit = str(training.get("resume_parent_project_commit", ""))
+    valid_parent_commit = len(parent_commit) in (40, 64) and all(
+        char in "0123456789abcdef" for char in parent_commit
+    )
+    if (
+        not resume_path.name.isdigit()
+        or int(resume_path.name) != resume_step
+        or resume_step < 0
+        or resume_step >= final_step
+        or training.get("resume_checkpoint_digest_algorithm") != CHECKPOINT_DIGEST_ALGORITHM
+        or resume_files < 1
+        or resume_bytes < 1
+        or len(resume_digest) != 64
+        or any(char not in "0123456789abcdef" for char in resume_digest)
+        or parent_metric_step < 0
+        or not valid_parent_commit
+    ):
+        raise ValueError("training completion has invalid resume lineage")
+    parent_complete = training.get("resume_parent_provenance_complete")
+    if not isinstance(parent_complete, bool):
+        raise ValueError("training completion resume parent completeness must be boolean")
+    if require_complete_resume_lineage and not parent_complete:
+        raise ValueError("formal deployment requires complete resume parent provenance")
+    if parent_complete:
+        try:
+            parent_openpi_files = int(training.get("resume_parent_openpi_source_files", 0))
+            parent_init_files = int(training.get("resume_parent_init_params_files", 0))
+            parent_dataset_files = int(training.get("resume_parent_dataset_files", 0))
+            parent_dataset_bytes = int(training.get("resume_parent_dataset_bytes", 0))
+        except (TypeError, ValueError) as error:
+            raise ValueError("training completion has invalid resume parent identities") from error
+        parent_openpi_sha256 = str(training.get("resume_parent_openpi_source_sha256", ""))
+        parent_init_sha256 = str(training.get("resume_parent_init_params_sha256", ""))
+        parent_dataset_sha256 = str(training.get("resume_parent_dataset_sha256", ""))
+        if (
+            training.get("resume_parent_project_dirty") is not False
+            or parent_openpi_files < 1
+            or len(parent_openpi_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in parent_openpi_sha256)
+            or parent_init_files < 1
+            or len(parent_init_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in parent_init_sha256)
+            or training.get("resume_parent_dataset_repo") != dataset_repo
+            or training.get("resume_parent_dataset_digest_algorithm")
+            != CHECKPOINT_DIGEST_ALGORITHM
+            or parent_dataset_files < 1
+            or parent_dataset_bytes < 1
+            or len(parent_dataset_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in parent_dataset_sha256)
+        ):
+            raise ValueError("training completion has invalid resume parent provenance")
 
 
 def validate_openpi_runtime(
@@ -507,6 +573,7 @@ def load_deployment(path: Path, *, require_validated: bool = True) -> Deployment
             byte_count=byte_count,
             dataset_repo=str(manifest.get("dataset_repo", "")),
             require_clean_provenance=require_validated,
+            require_complete_resume_lineage=require_validated,
         )
         for key in (
             "project_commit",

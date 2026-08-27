@@ -116,6 +116,12 @@ def completion_status(
         result["training_completion_error"] = str(error)
         return result
     result["training_completion_verified"] = True
+    result["resumed"] = completion.get("resumed", False)
+    result["resume_checkpoint_step"] = completion.get("resume_checkpoint_step")
+    result["resume_parent_project_commit"] = completion.get("resume_parent_project_commit")
+    result["resume_parent_provenance_complete"] = completion.get(
+        "resume_parent_provenance_complete"
+    )
     return result
 
 

@@ -126,6 +126,7 @@ def main() -> int:
             byte_count=byte_count,
             dataset_repo=args.dataset_repo,
             require_clean_provenance=args.evaluation_report is not None,
+            require_complete_resume_lineage=args.evaluation_report is not None,
         )
     elif args.evaluation_report is not None:
         raise FileNotFoundError(f"formal export requires training completion report: {training_path}")

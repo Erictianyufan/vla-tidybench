@@ -105,6 +105,107 @@ def validate_dataset_fingerprint(
         )
 
 
+def build_resume_provenance(run_dir: Path, metrics_path: Path) -> dict[str, object]:
+    """Bind a resumed segment to its latest complete checkpoint and prior metrics."""
+
+    run_dir = run_dir.expanduser().resolve()
+    candidates = sorted(
+        (
+            path
+            for path in run_dir.iterdir()
+            if path.is_dir()
+            and path.name.isdigit()
+            and all((path / relative).is_file() for relative in REQUIRED_CHECKPOINT_FILES)
+        ),
+        key=lambda path: int(path.name),
+        reverse=True,
+    )
+    if not candidates:
+        raise ValueError(f"resume requested but no complete checkpoint exists under {run_dir}")
+    checkpoint = candidates[0]
+    metrics_path = metrics_path.expanduser().resolve()
+    try:
+        lines = metrics_path.read_text(encoding="utf-8").splitlines()
+        prior_metric = json.loads(lines[-1])
+    except (OSError, IndexError, json.JSONDecodeError) as error:
+        raise ValueError(f"resume requested but prior metrics are unavailable: {metrics_path}") from error
+    if not isinstance(prior_metric, dict):
+        raise ValueError(f"resume prior metric must be a JSON object: {metrics_path}")
+    try:
+        parent_metric_step = int(prior_metric["step"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"resume prior metric has no valid step: {metrics_path}") from error
+    parent_commit = str(prior_metric.get("project_commit", ""))
+    valid_parent_commit = len(parent_commit) in (40, 64) and all(
+        char in "0123456789abcdef" for char in parent_commit
+    )
+    if not valid_parent_commit:
+        raise ValueError(f"resume prior metric has no valid project commit: {metrics_path}")
+
+    parent_openpi_sha256 = str(prior_metric.get("openpi_source_sha256", ""))
+    try:
+        parent_openpi_files = int(prior_metric.get("openpi_source_files", 0))
+    except (TypeError, ValueError):
+        parent_openpi_files = 0
+    parent_openpi_valid = (
+        parent_openpi_files > 0
+        and len(parent_openpi_sha256) == 64
+        and all(char in "0123456789abcdef" for char in parent_openpi_sha256)
+    )
+    parent_init_sha256 = str(prior_metric.get("init_params_sha256", ""))
+    parent_dataset_sha256 = str(prior_metric.get("dataset_sha256", ""))
+    try:
+        parent_init_files = int(prior_metric.get("init_params_files", 0))
+        parent_dataset_files = int(prior_metric.get("dataset_files", 0))
+        parent_dataset_bytes = int(prior_metric.get("dataset_bytes", 0))
+    except (TypeError, ValueError):
+        parent_init_files = 0
+        parent_dataset_files = 0
+        parent_dataset_bytes = 0
+    parent_init_valid = (
+        parent_init_files > 0
+        and len(parent_init_sha256) == 64
+        and all(char in "0123456789abcdef" for char in parent_init_sha256)
+    )
+    parent_dataset_valid = (
+        bool(str(prior_metric.get("dataset_repo", "")).strip())
+        and prior_metric.get("dataset_digest_algorithm") == CHECKPOINT_DIGEST_ALGORITHM
+        and parent_dataset_files > 0
+        and parent_dataset_bytes > 0
+        and len(parent_dataset_sha256) == 64
+        and all(char in "0123456789abcdef" for char in parent_dataset_sha256)
+    )
+    parent_provenance_complete = (
+        prior_metric.get("project_dirty") is False
+        and parent_openpi_valid
+        and parent_init_valid
+        and parent_dataset_valid
+    )
+    file_count, byte_count, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
+    return {
+        "resumed": True,
+        "resume_checkpoint": str(checkpoint),
+        "resume_checkpoint_step": int(checkpoint.name),
+        "resume_checkpoint_digest_algorithm": CHECKPOINT_DIGEST_ALGORITHM,
+        "resume_checkpoint_file_count": file_count,
+        "resume_checkpoint_byte_count": byte_count,
+        "resume_checkpoint_sha256": checkpoint_sha256,
+        "resume_parent_metric_step": parent_metric_step,
+        "resume_parent_project_commit": parent_commit,
+        "resume_parent_project_dirty": prior_metric.get("project_dirty"),
+        "resume_parent_openpi_source_files": parent_openpi_files or None,
+        "resume_parent_openpi_source_sha256": parent_openpi_sha256 or None,
+        "resume_parent_init_params_files": parent_init_files or None,
+        "resume_parent_init_params_sha256": parent_init_sha256 or None,
+        "resume_parent_dataset_repo": prior_metric.get("dataset_repo"),
+        "resume_parent_dataset_digest_algorithm": prior_metric.get("dataset_digest_algorithm"),
+        "resume_parent_dataset_files": parent_dataset_files or None,
+        "resume_parent_dataset_bytes": parent_dataset_bytes or None,
+        "resume_parent_dataset_sha256": parent_dataset_sha256 or None,
+        "resume_parent_provenance_complete": parent_provenance_complete,
+    }
+
+
 def git_state(project_root: Path) -> tuple[str, bool]:
     """Return a repository revision and whether its worktree is unclean/unreadable."""
 
@@ -329,6 +430,36 @@ def validate_completed_training_run(
         "dataset_files": final_metrics.get("dataset_files"),
         "dataset_bytes": final_metrics.get("dataset_bytes"),
         "dataset_sha256": final_metrics.get("dataset_sha256"),
+        "resumed": final_metrics.get("resumed", False),
+        "resume_checkpoint": final_metrics.get("resume_checkpoint"),
+        "resume_checkpoint_step": final_metrics.get("resume_checkpoint_step"),
+        "resume_checkpoint_digest_algorithm": final_metrics.get(
+            "resume_checkpoint_digest_algorithm"
+        ),
+        "resume_checkpoint_file_count": final_metrics.get("resume_checkpoint_file_count"),
+        "resume_checkpoint_byte_count": final_metrics.get("resume_checkpoint_byte_count"),
+        "resume_checkpoint_sha256": final_metrics.get("resume_checkpoint_sha256"),
+        "resume_parent_metric_step": final_metrics.get("resume_parent_metric_step"),
+        "resume_parent_project_commit": final_metrics.get("resume_parent_project_commit"),
+        "resume_parent_project_dirty": final_metrics.get("resume_parent_project_dirty"),
+        "resume_parent_openpi_source_files": final_metrics.get(
+            "resume_parent_openpi_source_files"
+        ),
+        "resume_parent_openpi_source_sha256": final_metrics.get(
+            "resume_parent_openpi_source_sha256"
+        ),
+        "resume_parent_init_params_files": final_metrics.get("resume_parent_init_params_files"),
+        "resume_parent_init_params_sha256": final_metrics.get("resume_parent_init_params_sha256"),
+        "resume_parent_dataset_repo": final_metrics.get("resume_parent_dataset_repo"),
+        "resume_parent_dataset_digest_algorithm": final_metrics.get(
+            "resume_parent_dataset_digest_algorithm"
+        ),
+        "resume_parent_dataset_files": final_metrics.get("resume_parent_dataset_files"),
+        "resume_parent_dataset_bytes": final_metrics.get("resume_parent_dataset_bytes"),
+        "resume_parent_dataset_sha256": final_metrics.get("resume_parent_dataset_sha256"),
+        "resume_parent_provenance_complete": final_metrics.get(
+            "resume_parent_provenance_complete"
+        ),
         "verified": True,
     }
     validate_training_completion(

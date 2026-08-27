@@ -17,6 +17,7 @@ from vla_tidybench.openpi.deployment import (
 from vla_tidybench.openpi.gpu_preflight import selected_gpu_indices, wait_for_exclusive_gpus
 from vla_tidybench.openpi.training_metrics import (
     JsonlTrainingMetrics,
+    build_resume_provenance,
     build_training_provenance,
     lerobot_dataset_path,
     source_tree_fingerprint,
@@ -169,6 +170,12 @@ def main() -> int:
     metrics_path = Path(
         os.environ.get("PI05_TRAIN_METRICS_PATH", Path(str(config.checkpoint_dir)) / "train_metrics.jsonl")
     )
+    resume_provenance: dict[str, object] = {"resumed": False}
+    if args.resume:
+        resume_provenance = build_resume_provenance(
+            Path(str(config.checkpoint_dir)),
+            metrics_path,
+        )
     metric_logger = None
     metric_metadata = {
         "config": config.name,
@@ -193,6 +200,7 @@ def main() -> int:
         "synthetic_data": args.synthetic_data,
         "init_params_files": init_params_files,
         "init_params_sha256": init_params_sha256,
+        **resume_provenance,
         **training_provenance,
     }
     original_wandb_log = official.wandb.log
