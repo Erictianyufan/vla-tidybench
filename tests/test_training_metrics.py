@@ -5,11 +5,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from vla_tidybench.openpi.deployment import checkpoint_fingerprint
 from vla_tidybench.openpi.training_metrics import (
-    JsonlTrainingMetrics,
     OPENPI_PROVENANCE_PATHS,
+    JsonlTrainingMetrics,
     lerobot_dataset_path,
     source_tree_fingerprint,
     validate_completed_training_run,
