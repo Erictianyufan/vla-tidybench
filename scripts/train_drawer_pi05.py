@@ -6,12 +6,13 @@ from __future__ import annotations
 import argparse
 import functools
 import importlib.util
+import json
 import os
 from pathlib import Path
 
 from vla_tidybench.openpi.drawer_config import make_config as make_open_config
 from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
-from vla_tidybench.openpi.training_metrics import JsonlTrainingMetrics
+from vla_tidybench.openpi.training_metrics import JsonlTrainingMetrics, validate_completed_training_run
 
 
 def openpi_train_script() -> Path:
@@ -125,6 +126,13 @@ def main() -> int:
 
     official.wandb.log = log_locally
     official.main(config)
+    verified = validate_completed_training_run(
+        Path(str(config.checkpoint_dir)),
+        num_train_steps=config.num_train_steps,
+        dataset_repo=str(metric_metadata["dataset_repo"]),
+        metrics_path=metrics_path,
+    )
+    print("training_artifacts", json.dumps(verified, sort_keys=True), flush=True)
     return 0
 
 

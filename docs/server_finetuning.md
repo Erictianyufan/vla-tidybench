@@ -182,6 +182,12 @@ three final steps (`4999`, `9999`, and `2999`) are present. The metric file is
 local and independent of WandB, so disabling external experiment tracking does
 not discard the optimization trace.
 
+Before a newly launched stage process returns success, it verifies the final
+numeric checkpoint, required Orbax metadata, the unique embedded normalization
+asset ID, the dataset identity, and the final JSONL metric step. A missing or
+mismatched artifact makes that stage fail instead of allowing the outer runner
+to advance with an unusable checkpoint.
+
 ## Validation sequence
 
 Compute separate normalization statistics after the final episode-level splits

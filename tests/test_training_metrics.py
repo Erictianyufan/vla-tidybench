@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from vla_tidybench.openpi.training_metrics import JsonlTrainingMetrics
+from vla_tidybench.openpi.training_metrics import JsonlTrainingMetrics, validate_completed_training_run
 
 
 def payload(*, loss: float = 1.5) -> dict[str, np.float32]:
@@ -63,3 +63,55 @@ def test_corrupt_existing_metrics_are_rejected(tmp_path: Path) -> None:
     path.write_text("not-json\n", encoding="utf-8")
     with pytest.raises(ValueError, match="invalid training metric"):
         JsonlTrainingMetrics(path, {"experiment": "stage"})
+
+
+def write_complete_checkpoint(path: Path, dataset_repo: str) -> None:
+    (path / "params").mkdir(parents=True)
+    (path / "assets" / dataset_repo).mkdir(parents=True)
+    (path / "_CHECKPOINT_METADATA").touch()
+    (path / "params" / "_METADATA").touch()
+    (path / "params" / "manifest.ocdbt").touch()
+    (path / "assets" / dataset_repo / "norm_stats.json").write_text("{}", encoding="utf-8")
+
+
+def test_completed_training_run_binds_checkpoint_metrics_and_assets(tmp_path: Path) -> None:
+    dataset_repo = "owner/hard_mix"
+    run_dir = tmp_path / "stage3"
+    write_complete_checkpoint(run_dir / "2", dataset_repo)
+    metrics_path = run_dir / "train_metrics.jsonl"
+    logger = JsonlTrainingMetrics(
+        metrics_path,
+        {"dataset_repo": dataset_repo, "num_train_steps": 3},
+    )
+    for step in range(3):
+        logger.log(payload(loss=3.0 - step), step=step)
+
+    report = validate_completed_training_run(
+        run_dir,
+        num_train_steps=3,
+        dataset_repo=dataset_repo,
+        metrics_path=metrics_path,
+    )
+
+    assert report["verified"] is True
+    assert report["final_step"] == 2
+    assert report["checkpoint_asset_id"] == dataset_repo
+    assert report["loss"] == pytest.approx(1.0)
+
+
+def test_completed_training_run_rejects_wrong_checkpoint_assets(tmp_path: Path) -> None:
+    run_dir = tmp_path / "stage3"
+    write_complete_checkpoint(run_dir / "0", "owner/wrong")
+    metrics_path = run_dir / "train_metrics.jsonl"
+    JsonlTrainingMetrics(
+        metrics_path,
+        {"dataset_repo": "owner/expected", "num_train_steps": 1},
+    ).log(payload(), step=0)
+
+    with pytest.raises(ValueError, match="does not match dataset"):
+        validate_completed_training_run(
+            run_dir,
+            num_train_steps=1,
+            dataset_repo="owner/expected",
+            metrics_path=metrics_path,
+        )

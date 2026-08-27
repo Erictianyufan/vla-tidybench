@@ -42,3 +42,4 @@ def test_train_wrapper_installs_local_metric_logging() -> None:
     assert '"train_metrics.jsonl"' in source
     assert '"num_train_steps": config.num_train_steps' in source
     assert "official.wandb.log = log_locally" in source
+    assert "validate_completed_training_run(" in source
