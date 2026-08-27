@@ -105,6 +105,7 @@ def split_nominal(
     validation_fraction: float,
     min_train_per_prompt: int,
     min_validation_per_prompt: int,
+    namespace: str = "nominal",
 ) -> tuple[list[Episode], list[Episode]]:
     groups: dict[str, list[Episode]] = defaultdict(list)
     for episode in episodes:
@@ -118,7 +119,9 @@ def split_nominal(
                 f"{min_train_per_prompt + min_validation_per_prompt}"
             )
         shuffled = sorted(selected, key=lambda episode: (episode.file, episode.index))
-        prompt_seed = int.from_bytes(hashlib.sha256(f"{seed}\0{prompt}".encode()).digest()[:8], "big")
+        prompt_seed = int.from_bytes(
+            hashlib.sha256(f"{namespace}\0{seed}\0{prompt}".encode()).digest()[:8], "big"
+        )
         random.Random(prompt_seed).shuffle(shuffled)
         validation_count = max(min_validation_per_prompt, round(len(shuffled) * validation_fraction))
         validation_count = min(validation_count, len(shuffled) - min_train_per_prompt)
@@ -199,16 +202,25 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--repo-prefix", required=True, help="e.g. owner/vla_tidybench_drawer_v1")
     parser.add_argument("--seed", type=int, default=2026)
-    parser.add_argument("--validation-fraction", type=float, default=0.2)
+    parser.add_argument("--validation-fraction", type=float, default=0.1)
+    parser.add_argument("--hard-validation-fraction", type=float, default=0.2)
     parser.add_argument("--min-train-per-prompt", type=int, default=8)
     parser.add_argument("--min-validation-per-prompt", type=int, default=2)
     parser.add_argument("--min-hard-per-prompt", type=int, default=2)
+    parser.add_argument("--min-hard-validation-per-prompt", type=int, default=2)
     parser.add_argument("--nominal-replay-ratio", type=float, default=1.0)
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
     if not 0.0 < args.validation_fraction < 1.0:
         parser.error("--validation-fraction must be in (0, 1)")
-    if min(args.min_train_per_prompt, args.min_validation_per_prompt, args.min_hard_per_prompt) < 1:
+    if not 0.0 < args.hard_validation_fraction < 1.0:
+        parser.error("--hard-validation-fraction must be in (0, 1)")
+    if min(
+        args.min_train_per_prompt,
+        args.min_validation_per_prompt,
+        args.min_hard_per_prompt,
+        args.min_hard_validation_per_prompt,
+    ) < 1:
         parser.error("minimum episode counts must be positive")
     if args.nominal_replay_ratio <= 0:
         parser.error("--nominal-replay-ratio must be positive")
@@ -226,10 +238,19 @@ def main() -> int:
         validation_fraction=args.validation_fraction,
         min_train_per_prompt=args.min_train_per_prompt,
         min_validation_per_prompt=args.min_validation_per_prompt,
+        namespace="nominal",
+    )
+    hard_train, hard_validation = split_nominal(
+        hard,
+        seed=args.seed,
+        validation_fraction=args.hard_validation_fraction,
+        min_train_per_prompt=args.min_hard_per_prompt,
+        min_validation_per_prompt=args.min_hard_validation_per_prompt,
+        namespace="hard_recovery",
     )
     mixed = hard_mix(
         train,
-        hard,
+        hard_train,
         seed=args.seed,
         nominal_replay_ratio=args.nominal_replay_ratio,
         min_hard_per_prompt=args.min_hard_per_prompt,
@@ -237,6 +258,9 @@ def main() -> int:
     assignments = {
         "main_train.json": manifest(f"{args.repo_prefix}_train", main_config, train, split="train"),
         "main_validation.json": manifest(f"{args.repo_prefix}_validation", main_config, validation, split="validation"),
+        "hard_validation.json": manifest(
+            f"{args.repo_prefix}_hard_validation", hard_config, hard_validation, split="hard_validation"
+        ),
         "hard_mix_train.json": manifest(f"{args.repo_prefix}_hard_mix", main_config, mixed, split="hard_mix_train"),
     }
     canonical = json.dumps(assignments, sort_keys=True, separators=(",", ":")).encode()
@@ -245,13 +269,23 @@ def main() -> int:
         "split_id": hashlib.sha256(canonical).hexdigest(),
         "seed": args.seed,
         "validation_fraction": args.validation_fraction,
+        "hard_validation_fraction": args.hard_validation_fraction,
         "nominal_replay_ratio": args.nominal_replay_ratio,
         "main_train": count_by_prompt(train),
         "main_validation": count_by_prompt(validation),
         "hard_recovery": count_by_prompt(hard),
+        "hard_train": count_by_prompt(hard_train),
+        "hard_validation": count_by_prompt(hard_validation),
         "hard_mix_train": count_by_prompt(mixed),
         "leakage": {
             "train_validation_overlap": len({episode.key for episode in train} & {episode.key for episode in validation}),
+            "hard_train_validation_overlap": len(
+                {episode.key for episode in hard_train} & {episode.key for episode in hard_validation}
+            ),
+            "all_train_validation_overlap": len(
+                ({episode.key for episode in train} | {episode.key for episode in hard_train})
+                & ({episode.key for episode in validation} | {episode.key for episode in hard_validation})
+            ),
             "nominal_hard_overlap": len({episode.key for episode in nominal} & {episode.key for episode in hard}),
         },
     }

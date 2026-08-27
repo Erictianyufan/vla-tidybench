@@ -85,7 +85,7 @@ pi05-plan-data:
 
 pi05-convert-data:
 	@manifest_dir=$${MANIFEST_DIR:-$(VLA_TIDYBENCH_DATA)/manifests/pi05-formal}; \
-	for manifest in main_train.json main_validation.json hard_mix_train.json; do \
+	for manifest in main_train.json main_validation.json hard_validation.json hard_mix_train.json; do \
 		test -f "$$manifest_dir/$$manifest" || { echo "missing $$manifest_dir/$$manifest" >&2; exit 2; }; \
 		./scripts/run_openpi.sh scripts/convert_stack_to_lerobot.py \
 			--config "$$manifest_dir/$$manifest" --data-root $(VLA_TIDYBENCH_DATA)/raw --overwrite || exit $$?; \

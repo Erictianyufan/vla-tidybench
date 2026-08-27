@@ -52,8 +52,8 @@ def test_episode_split_and_hard_replay_mix_are_disjoint_and_deterministic(tmp_pa
     for index, prompt in enumerate(prompts):
         main_file = f"main_{index}.hdf5"
         hard_file = f"hard_{index}.hdf5"
-        write_source(tmp_path / main_file, 5)
-        write_source(tmp_path / hard_file, 2)
+        write_source(tmp_path / main_file, 10)
+        write_source(tmp_path / hard_file, 5)
         main_sources.append((main_file, prompt))
         hard_sources.append((hard_file, prompt))
     main_config = tmp_path / "main.json"
@@ -66,20 +66,28 @@ def test_episode_split_and_hard_replay_mix_are_disjoint_and_deterministic(tmp_pa
     train, validation = planning.split_nominal(
         nominal,
         seed=2026,
-        validation_fraction=0.4,
-        min_train_per_prompt=3,
+        validation_fraction=0.2,
+        min_train_per_prompt=8,
         min_validation_per_prompt=2,
     )
     repeated = planning.split_nominal(
         nominal,
         seed=2026,
-        validation_fraction=0.4,
-        min_train_per_prompt=3,
+        validation_fraction=0.2,
+        min_train_per_prompt=8,
         min_validation_per_prompt=2,
+    )
+    hard_train, hard_validation = planning.split_nominal(
+        hard,
+        seed=2026,
+        validation_fraction=0.2,
+        min_train_per_prompt=4,
+        min_validation_per_prompt=1,
+        namespace="hard_recovery",
     )
     mixed = planning.hard_mix(
         train,
-        hard,
+        hard_train,
         seed=2026,
         nominal_replay_ratio=1.0,
         min_hard_per_prompt=2,
@@ -87,11 +95,14 @@ def test_episode_split_and_hard_replay_mix_are_disjoint_and_deterministic(tmp_pa
 
     assert [episode.key for episode in train] == [episode.key for episode in repeated[0]]
     assert not ({episode.key for episode in train} & {episode.key for episode in validation})
-    assert len(train) == 6
+    assert len(train) == 16
     assert len(validation) == 4
-    assert len(mixed) == 8
-    assert sum(episode.role == "hard_recovery" for episode in mixed) == 4
-    assert sum(episode.role == "nominal" for episode in mixed) == 4
+    assert len(hard_train) == 8
+    assert len(hard_validation) == 2
+    assert not ({episode.key for episode in hard_train} & {episode.key for episode in hard_validation})
+    assert len(mixed) == 16
+    assert sum(episode.role == "hard_recovery" for episode in mixed) == 8
+    assert sum(episode.role == "nominal" for episode in mixed) == 8
 
 
 def test_unsuccessful_episode_cannot_enter_supervised_manifest(tmp_path: Path) -> None:

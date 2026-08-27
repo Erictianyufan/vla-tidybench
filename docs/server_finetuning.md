@@ -66,24 +66,29 @@ make pi05-formal-pipeline \
 ```
 
 For a fresh experiment use `TRAIN_STATE_FLAG=--overwrite`. The pipeline invokes
-the audited planner before any training, converts all three frozen manifests,
+the audited planner before any training, converts all four frozen manifests,
 computes nominal and hard-mixture normalization statistics independently, and
 then launches the LoRA, full, and hard-recovery stages.
 
-The planner defaults to at least eight nominal training, two validation and two
-hard-recovery episodes per prompt. It audits HDF5 shapes/success attributes,
-uses a locked seed, rejects duplicate or cross-set episodes, and writes:
+The planner defaults to a 10% nominal validation split and a 20% hard-recovery
+validation split, with at least eight nominal training, two nominal validation,
+two hard-recovery training, and two hard-recovery validation episodes per
+prompt. On the engineering profile this produces the prescribed 90/10 nominal
+and 40/10 hard split per skill. It audits HDF5 shapes/success attributes, uses a
+locked seed, rejects duplicate or cross-set episodes, and writes:
 
 ```text
 $VLA_TIDYBENCH_DATA/manifests/pi05-formal/main_train.json
 $VLA_TIDYBENCH_DATA/manifests/pi05-formal/main_validation.json
+$VLA_TIDYBENCH_DATA/manifests/pi05-formal/hard_validation.json
 $VLA_TIDYBENCH_DATA/manifests/pi05-formal/hard_mix_train.json
 $VLA_TIDYBENCH_DATA/manifests/pi05-formal/split_audit.json
 ```
 
 The corresponding local LeRobot IDs are
 `scuee_user06/vla_tidybench_drawer_v1_train`,
-`scuee_user06/vla_tidybench_drawer_v1_validation`, and
+`scuee_user06/vla_tidybench_drawer_v1_validation`,
+`scuee_user06/vla_tidybench_drawer_v1_hard_validation`, and
 `scuee_user06/vla_tidybench_drawer_v1_hard_mix`. They do not need to be
 published when training from the same mechanical disk.
 
