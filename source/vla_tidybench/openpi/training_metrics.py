@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import math
+import subprocess
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -14,6 +16,71 @@ from typing import Any
 from vla_tidybench.openpi.deployment import REQUIRED_CHECKPOINT_FILES, checkpoint_asset_id
 
 METRIC_KEYS = ("loss", "grad_norm", "param_norm")
+OPENPI_PROVENANCE_PATHS = (
+    Path("scripts/train.py"),
+    Path("src/openpi"),
+    Path("packages/openpi-client/src"),
+    Path("pyproject.toml"),
+    Path("uv.lock"),
+)
+
+
+def git_state(project_root: Path) -> tuple[str, bool]:
+    """Return a repository revision and whether its worktree is unclean/unreadable."""
+
+    root = project_root.expanduser().resolve()
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=False
+    )
+    status = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=root, text=True, capture_output=True, check=False
+    )
+    revision = commit.stdout.strip() if commit.returncode == 0 else ""
+    dirty = status.returncode != 0 or bool(status.stdout.strip())
+    return revision, dirty
+
+
+def source_tree_fingerprint(root: Path, relative_paths: tuple[Path, ...]) -> tuple[int, str]:
+    """Hash path identities and bytes for the exact source roots used by training."""
+
+    root = root.expanduser().resolve()
+    files: set[Path] = set()
+    for relative in relative_paths:
+        target = root / relative
+        if target.is_file():
+            files.add(target)
+        elif target.is_dir():
+            files.update(
+                path
+                for path in target.rglob("*")
+                if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+            )
+        else:
+            raise FileNotFoundError(f"training source path is missing: {target}")
+    digest = hashlib.sha256()
+    ordered = sorted(files, key=lambda path: path.relative_to(root).as_posix())
+    for path in ordered:
+        relative = path.relative_to(root).as_posix().encode()
+        digest.update(relative)
+        digest.update(b"\0")
+        with path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        digest.update(b"\0")
+    return len(ordered), digest.hexdigest()
+
+
+def build_training_provenance(project_root: Path, openpi_root: Path) -> dict[str, object]:
+    """Capture immutable identities for the project checkout and OpenPI source tree."""
+
+    project_commit, project_dirty = git_state(project_root)
+    openpi_files, openpi_sha256 = source_tree_fingerprint(openpi_root, OPENPI_PROVENANCE_PATHS)
+    return {
+        "project_commit": project_commit,
+        "project_dirty": project_dirty,
+        "openpi_source_files": openpi_files,
+        "openpi_source_sha256": openpi_sha256,
+    }
 
 
 @dataclass
@@ -111,6 +178,30 @@ def validate_completed_training_run(
         )
     if final_metrics.get("dataset_repo") != dataset_repo:
         raise ValueError("final training metric dataset does not match the completed stage")
+    if dataset_repo != "fake":
+        project_commit = str(final_metrics.get("project_commit", ""))
+        valid_commit = len(project_commit) in (40, 64) and all(
+            char in "0123456789abcdef" for char in project_commit
+        )
+        if not valid_commit or final_metrics.get("project_dirty") is not False:
+            raise ValueError("formal training metrics require an exact clean project commit")
+        openpi_sha256 = str(final_metrics.get("openpi_source_sha256", ""))
+        openpi_files = int(final_metrics.get("openpi_source_files", 0))
+        if (
+            len(openpi_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in openpi_sha256)
+            or openpi_files < 1
+        ):
+            raise ValueError("formal training metrics require a valid OpenPI source fingerprint")
+        init_sha256 = str(final_metrics.get("init_params_sha256", ""))
+        init_files = int(final_metrics.get("init_params_files", 0))
+        if (
+            not str(final_metrics.get("init_params", "")).strip()
+            or len(init_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in init_sha256)
+            or init_files < 1
+        ):
+            raise ValueError("formal training metrics require a valid initialization fingerprint")
     nonfinite = [
         key for key in METRIC_KEYS if not math.isfinite(float(final_metrics.get(key, float("nan"))))
     ]
@@ -125,5 +216,12 @@ def validate_completed_training_run(
         "loss": float(final_metrics["loss"]),
         "grad_norm": float(final_metrics["grad_norm"]),
         "param_norm": float(final_metrics["param_norm"]),
+        "project_commit": final_metrics.get("project_commit"),
+        "project_dirty": final_metrics.get("project_dirty"),
+        "openpi_source_files": final_metrics.get("openpi_source_files"),
+        "openpi_source_sha256": final_metrics.get("openpi_source_sha256"),
+        "init_params": final_metrics.get("init_params"),
+        "init_params_files": final_metrics.get("init_params_files"),
+        "init_params_sha256": final_metrics.get("init_params_sha256"),
         "verified": True,
     }

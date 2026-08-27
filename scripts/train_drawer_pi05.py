@@ -11,7 +11,12 @@ import os
 from pathlib import Path
 
 from vla_tidybench.openpi.gpu_preflight import selected_gpu_indices, wait_for_exclusive_gpus
-from vla_tidybench.openpi.training_metrics import JsonlTrainingMetrics, validate_completed_training_run
+from vla_tidybench.openpi.training_metrics import (
+    JsonlTrainingMetrics,
+    build_training_provenance,
+    source_tree_fingerprint,
+    validate_completed_training_run,
+)
 
 
 def openpi_train_script() -> Path:
@@ -60,9 +65,10 @@ def main() -> int:
 
     max_used_mib = int(os.environ.get("PI05_GPU_PREFLIGHT_MAX_USED_MIB", "512"))
     timeout_s = float(os.environ.get("PI05_GPU_PREFLIGHT_TIMEOUT_S", "21600"))
+    selected_gpus = selected_gpu_indices()
     if os.environ.get("PI05_SKIP_GPU_PREFLIGHT") != "1":
         wait_for_exclusive_gpus(
-            selected_gpu_indices(),
+            selected_gpus,
             max_used_mib=max_used_mib,
             timeout_s=timeout_s,
         )
@@ -82,7 +88,15 @@ def main() -> int:
             parser.error(f"initial parameter directory does not exist: {args.init_params}")
         os.environ["PI05_CHECKPOINT_PARAMS"] = str(args.init_params.resolve())
 
+    project_root = Path(__file__).resolve().parents[1]
     train_script = openpi_train_script()
+    training_provenance = build_training_provenance(project_root, train_script.parents[1])
+    init_params_files = None
+    init_params_sha256 = None
+    if args.init_params:
+        init_params_files, init_params_sha256 = source_tree_fingerprint(
+            args.init_params, (Path("."),)
+        )
     spec = importlib.util.spec_from_file_location("openpi_train", train_script)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {train_script}")
@@ -122,6 +136,15 @@ def main() -> int:
         "num_train_steps": config.num_train_steps,
         "batch_size": config.batch_size,
         "fsdp_devices": config.fsdp_devices,
+        "cuda_visible_devices": list(selected_gpus),
+        "peak_lr": args.peak_lr,
+        "warmup_steps": args.warmup_steps,
+        "save_interval": args.save_interval,
+        "fsdp_min_size_mbytes": args.fsdp_min_size_mbytes,
+        "synthetic_data": args.synthetic_data,
+        "init_params_files": init_params_files,
+        "init_params_sha256": init_params_sha256,
+        **training_provenance,
     }
     original_wandb_log = official.wandb.log
 

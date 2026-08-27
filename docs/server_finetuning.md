@@ -188,8 +188,12 @@ without any complete checkpoint is rejected instead of being overwritten.
 
 Each newly launched training subprocess also writes append-only numeric metrics
 to `train_metrics.jsonl` beside its checkpoints. Every record contains loss,
-gradient norm, parameter norm, the dataset/config identity, and a unique process
-session ID. A resumed process may replay steps after its last durable
+gradient norm, parameter norm, the dataset/config identity, a unique process
+session ID, the clean vla-tidybench Git commit, the selected GPUs and optimizer
+overrides, plus content fingerprints of both the OpenPI training sources and the
+initial parameter tree. The source fingerprint preserves provenance even when
+OpenPI was installed from an archive without `.git`. A resumed process may replay
+steps after its last durable
 checkpoint; the raw history is retained, while the summary uses the newest
 record for each repeated step. Generate the auditable three-stage summary with:
 

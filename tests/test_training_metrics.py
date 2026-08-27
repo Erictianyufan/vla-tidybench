@@ -5,7 +5,27 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from vla_tidybench.openpi.training_metrics import JsonlTrainingMetrics, validate_completed_training_run
+from vla_tidybench.openpi.training_metrics import (
+    JsonlTrainingMetrics,
+    source_tree_fingerprint,
+    validate_completed_training_run,
+)
+
+PROJECT_COMMIT = "d" * 40
+
+
+def formal_metadata(dataset_repo: str, steps: int) -> dict[str, object]:
+    return {
+        "dataset_repo": dataset_repo,
+        "num_train_steps": steps,
+        "project_commit": PROJECT_COMMIT,
+        "project_dirty": False,
+        "openpi_source_files": 3,
+        "openpi_source_sha256": "e" * 64,
+        "init_params": "/checkpoints/base/params",
+        "init_params_files": 2,
+        "init_params_sha256": "f" * 64,
+    }
 
 
 def payload(*, loss: float = 1.5) -> dict[str, np.float32]:
@@ -81,7 +101,7 @@ def test_completed_training_run_binds_checkpoint_metrics_and_assets(tmp_path: Pa
     metrics_path = run_dir / "train_metrics.jsonl"
     logger = JsonlTrainingMetrics(
         metrics_path,
-        {"dataset_repo": dataset_repo, "num_train_steps": 3},
+        formal_metadata(dataset_repo, 3),
     )
     for step in range(3):
         logger.log(payload(loss=3.0 - step), step=step)
@@ -105,7 +125,7 @@ def test_completed_training_run_rejects_wrong_checkpoint_assets(tmp_path: Path) 
     metrics_path = run_dir / "train_metrics.jsonl"
     JsonlTrainingMetrics(
         metrics_path,
-        {"dataset_repo": "owner/expected", "num_train_steps": 1},
+        formal_metadata("owner/expected", 1),
     ).log(payload(), step=0)
 
     with pytest.raises(ValueError, match="does not match dataset"):
@@ -115,3 +135,36 @@ def test_completed_training_run_rejects_wrong_checkpoint_assets(tmp_path: Path) 
             dataset_repo="owner/expected",
             metrics_path=metrics_path,
         )
+
+
+def test_formal_training_requires_source_provenance(tmp_path: Path) -> None:
+    dataset_repo = "owner/data"
+    run_dir = tmp_path / "stage"
+    write_complete_checkpoint(run_dir / "0", dataset_repo)
+    metrics_path = run_dir / "train_metrics.jsonl"
+    JsonlTrainingMetrics(
+        metrics_path,
+        {"dataset_repo": dataset_repo, "num_train_steps": 1},
+    ).log(payload(), step=0)
+
+    with pytest.raises(ValueError, match="clean project commit"):
+        validate_completed_training_run(
+            run_dir,
+            num_train_steps=1,
+            dataset_repo=dataset_repo,
+            metrics_path=metrics_path,
+        )
+
+
+def test_source_tree_fingerprint_is_content_bound(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "config.toml").write_text("name = 'test'\n", encoding="utf-8")
+
+    count, before = source_tree_fingerprint(tmp_path, (Path("src"), Path("config.toml")))
+    (tmp_path / "src" / "a.py").write_text("value = 2\n", encoding="utf-8")
+    _, after = source_tree_fingerprint(tmp_path, (Path("src"), Path("config.toml")))
+
+    assert count == 2
+    assert len(before) == 64
+    assert before != after
