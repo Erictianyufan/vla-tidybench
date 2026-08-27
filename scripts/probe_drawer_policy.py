@@ -71,6 +71,13 @@ def main() -> int:
             or any(char not in "0123456789abcdef" for char in training_dataset_sha256)
         ):
             raise ValueError("policy service has no verified training dataset SHA-256")
+        training_openpi_sha256 = str(metadata.get("openpi_source_sha256", ""))
+        runtime_openpi_sha256 = str(metadata.get("runtime_openpi_source_sha256", ""))
+        if args.require_evaluation and (
+            len(runtime_openpi_sha256) != 64
+            or runtime_openpi_sha256 != training_openpi_sha256
+        ):
+            raise ValueError("policy runtime OpenPI source differs from its training source")
 
         for run in range(1, args.warmup_runs + 1):
             warmup_samples.append(infer_once(client, args.prompt, run))
@@ -110,6 +117,8 @@ def main() -> int:
                     metadata.get("training_completion_verified", False)
                 ),
                 "training_dataset_sha256": training_dataset_sha256 or None,
+                "training_openpi_source_sha256": training_openpi_sha256 or None,
+                "runtime_openpi_source_sha256": runtime_openpi_sha256 or None,
                 "synthetic_identity_norm": bool(metadata.get("synthetic_identity_norm", False)),
                 "actions_shape": [16, 7],
                 "warmup_samples": warmup_samples,

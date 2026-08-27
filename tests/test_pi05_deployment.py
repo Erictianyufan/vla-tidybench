@@ -13,6 +13,7 @@ from vla_tidybench.openpi.deployment import (
     checkpoint_asset_id,
     checkpoint_fingerprint,
     load_deployment,
+    validate_openpi_runtime,
 )
 from vla_tidybench.task_metrics import FORMAL_SUCCESS_HOLD_STEPS, SUCCESS_PREDICATE_VERSION
 
@@ -63,6 +64,8 @@ def formal_evaluation(checkpoint: Path, checkpoint_sha256: str) -> dict[str, obj
             "context": f"drawer_{skill}_formal.hdf5::demo_{seed}",
             "checkpoint_sha256": checkpoint_sha256,
             "project_commit": PROJECT_COMMIT,
+            "openpi_source_files": 72,
+            "openpi_source_sha256": "a" * 64,
             "success_predicate": SUCCESS_PREDICATE_VERSION,
             "success_hold_steps": FORMAL_SUCCESS_HOLD_STEPS,
             "success": True,
@@ -78,6 +81,8 @@ def formal_evaluation(checkpoint: Path, checkpoint_sha256: str) -> dict[str, obj
         "checkpoint": str(checkpoint.resolve()),
         "checkpoint_sha256": checkpoint_sha256,
         "project_commit": PROJECT_COMMIT,
+        "openpi_source_files": 72,
+        "openpi_source_sha256": "a" * 64,
         "context_lock": context_lock,
         "context_lock_sha256": hashlib.sha256(
             (json.dumps(context_lock, indent=2) + "\n").encode()
@@ -190,6 +195,14 @@ def test_validated_deployment_is_accepted(tmp_path: Path) -> None:
     assert deployment.evaluation is not None
     assert deployment.checkpoint.name == "2999"
     assert checkpoint_asset_id(deployment.checkpoint) == "owner/data"
+
+
+def test_runtime_openpi_must_match_training_source(tmp_path: Path) -> None:
+    deployment = load_deployment(make_deployment(tmp_path))
+    assert deployment.training is not None
+    validate_openpi_runtime(deployment.training, source_files=72, source_sha256="a" * 64)
+    with pytest.raises(ValueError, match="runtime OpenPI"):
+        validate_openpi_runtime(deployment.training, source_files=72, source_sha256="b" * 64)
 
 
 def test_dataset_repo_must_match_embedded_normalization_assets(tmp_path: Path) -> None:
@@ -387,6 +400,8 @@ def test_policy_probe_checks_action_shape_and_checkpoint_metadata() -> None:
     assert 'metadata.get("checkpoint_sha256", "")' in source
     assert 'metadata.get("evaluation_gate_passed"' in source
     assert 'metadata.get("training_completion_verified"' in source
+    assert 'metadata.get("runtime_openpi_source_sha256", "")' in source
+    assert "runtime_openpi_sha256 != training_openpi_sha256" in source
 
 
 def test_policy_server_binds_config_to_checkpoint_dataset_assets() -> None:
@@ -397,6 +412,8 @@ def test_policy_server_binds_config_to_checkpoint_dataset_assets() -> None:
     assert '"project_commit": project_commit' in source
     assert '"training_completion_verified": bool(deployment and deployment.training)' in source
     assert "validated deployment must be served by its exact clean project commit" in source
+    assert "runtime_openpi_files, runtime_openpi_sha256 = source_tree_fingerprint(" in source
+    assert "validate_openpi_runtime(" in source
 
 
 def test_evaluation_from_another_project_commit_is_rejected(tmp_path: Path) -> None:

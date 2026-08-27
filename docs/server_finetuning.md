@@ -346,6 +346,10 @@ consecutive 20-Hz control steps. The rollout records the initial/final drawer,
 bottle and gripper state, and the summarizer rejects older or missing predicate
 versions, recomputes terminal success from those states, and rejects a forged or
 inconsistent `success` label instead of silently mixing incomparable results.
+Every autonomous rollout also records the policy service's measured OpenPI
+source-tree file count and SHA-256. The summarizer rejects missing or mixed
+OpenPI identities, and formal export requires the evaluation identity to match
+the one frozen in `training_completion.json`.
 
 Override `MIN_SUCCESS_RATE` or `MAX_P95_INFER_MS` only when documenting an
 exploratory acceptance profile. Formal export accepts the locked profile or a
@@ -370,12 +374,13 @@ as a format-version-3 bundle. Formal export automatically requires and embeds
 the stage-3 `training_completion.json`; use `TRAINING_REPORT=/absolute/path` only
 when the completion report is stored somewhere other than beside the stage-3
 numeric checkpoint.
-plus a checksum-bound copy of `evaluation.json` and, by default, a complete
-portable copy of the checkpoint weights. Set `EXPORT_STORAGE=symlink` only for
+The bundle also contains a checksum-bound copy of `evaluation.json` and, by
+default, a complete portable copy of the checkpoint weights. Set
+`EXPORT_STORAGE=symlink` only for
 a same-server deployment where avoiding the additional 12-GB-class copy is
 more important than portability. Both modes are built in a staging directory,
 verified before publication, and preserve the prior bundle if replacement
-fails. The format-2 manifest stores a deterministic SHA-256 over every relative
+fails. The format-3 manifest stores a deterministic SHA-256 over every relative
 checkpoint path, file size and file byte. The policy service publishes that
 digest into every rollout, the evaluation report requires one exact digest,
 and export refuses a report whose evaluated digest differs from the checkpoint
@@ -390,6 +395,13 @@ make pi05-verify-deployment DEPLOYMENT=$DEPLOYMENT
 make pi05-deployment-serve DEPLOYMENT=$DEPLOYMENT POLICY_GPU=1
 ```
 
+Validated serving recomputes the inference host's OpenPI source-tree
+fingerprint before model construction and requires it to equal the
+training-time fingerprint. A portable deployment therefore needs the exact
+OpenPI source tree identified by `openpi_source_sha256`, not merely a
+compatible package version. The service exposes both training and runtime
+digests for the readiness probe.
+
 From a second shell, verify the real WebSocket serialization, handshake,
 checkpoint identity, `(16, 7)` response and warm inference latency:
 
@@ -402,7 +414,8 @@ POLICY_PROBE_FLAG="--expect-deployment $DEPLOYMENT --require-evaluation \
 The probe performs one JIT warm-up request by default, then checks five measured
 requests. It validates the `(16, 7)` finite action contract, checkpoint identity,
 formal evaluation gate, embedded training-completion proof, policy-side P95, and
-end-to-end WebSocket P95. `PROBE_WARMUP_RUNS` and `PROBE_RUNS` control sample
+matching training/runtime OpenPI source digests, plus end-to-end WebSocket P95.
+`PROBE_WARMUP_RUNS` and `PROBE_RUNS` control sample
 counts without weakening the recorded formal evaluation gate.
 
 The verifier resolves the checkpoint link, checks required Orbax metadata,

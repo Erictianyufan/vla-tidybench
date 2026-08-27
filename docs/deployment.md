@@ -67,9 +67,13 @@ dataset repository and full local LeRobot content fingerprint, normalization
 asset, clean training-project commit, OpenPI source tree fingerprint,
 initialization-parameter fingerprint, and checkpoint content digest. The policy
 service advertises the verified training-dataset SHA-256, and the formal
-real-time probe requires it. A formal deployment is rejected if this training proof, the autonomous
-evaluation report, or the copied checkpoint disagrees with either of the other
-two artifacts.
+real-time probe requires it. At service startup the local OpenPI source tree is
+fingerprinted again; validated serving and the real-time probe both require its
+file count and SHA-256 to match the OpenPI tree used for training. Therefore a
+portable deployment also needs the matching OpenPI checkout, not only the
+checkpoint bundle. A formal deployment is rejected if this training proof, the
+autonomous evaluation report, or the copied checkpoint disagrees with either
+of the other two artifacts.
 
 Formal exports copy the checkpoint into the deployment bundle by default, so
 the directory can be transferred to an Isaac host without retaining the source

@@ -15,6 +15,8 @@ from vla_tidybench.task_metrics import FORMAL_SUCCESS_HOLD_STEPS, SUCCESS_PREDIC
 ROOT = Path(__file__).resolve().parents[1]
 CHECKPOINT_SHA256 = "a" * 64
 PROJECT_COMMIT = "b" * 40
+OPENPI_SOURCE_FILES = 72
+OPENPI_SOURCE_SHA256 = "c" * 64
 SPEC = importlib.util.spec_from_file_location("summarize_pi05_eval", ROOT / "scripts/summarize_pi05_eval.py")
 assert SPEC is not None and SPEC.loader is not None
 evaluation = importlib.util.module_from_spec(SPEC)
@@ -66,6 +68,8 @@ def write_rollout(
         output.attrs["policy_checkpoint_sha256"] = CHECKPOINT_SHA256
         output.attrs["policy_project_commit"] = PROJECT_COMMIT
         output.attrs["policy_project_dirty"] = False
+        output.attrs["policy_runtime_openpi_source_files"] = OPENPI_SOURCE_FILES
+        output.attrs["policy_runtime_openpi_source_sha256"] = OPENPI_SOURCE_SHA256
         output.attrs["rollout_project_commit"] = PROJECT_COMMIT
         output.attrs["rollout_project_dirty"] = False
         output.attrs["policy_residual_weight"] = residual_weight
@@ -107,6 +111,8 @@ def test_four_skill_autonomous_gate_passes(tmp_path: Path) -> None:
     assert report["overall_success_rate"] == pytest.approx(2 / 3)
     assert report["checkpoint_sha256"] == CHECKPOINT_SHA256
     assert report["project_commit"] == PROJECT_COMMIT
+    assert report["openpi_source_files"] == OPENPI_SOURCE_FILES
+    assert report["openpi_source_sha256"] == OPENPI_SOURCE_SHA256
     assert report["p95_infer_ms"] <= 110.0
 
 
@@ -182,6 +188,28 @@ def test_mixed_checkpoint_digests_fail_the_gate(tmp_path: Path) -> None:
     )
     assert report["gate_passed"] is False
     assert any("expected one checkpoint SHA-256" in violation for violation in report["violations"])
+
+
+def test_mixed_openpi_sources_fail_the_gate(tmp_path: Path) -> None:
+    first = tmp_path / "open-1.hdf5"
+    second = tmp_path / "open-2.hdf5"
+    write_rollout(first, skill="open", seed=1, success=True)
+    write_rollout(second, skill="open", seed=2, success=True)
+    with h5py.File(second, "r+") as output:
+        output.attrs["policy_runtime_openpi_source_sha256"] = "d" * 64
+    report = evaluation.summarize(
+        [
+            evaluation.read_episode(first, allow_assisted=False),
+            evaluation.read_episode(second, allow_assisted=False),
+        ],
+        required_skills=("open",),
+        min_episodes_per_skill=1,
+        min_success_rate=None,
+        max_p95_infer_ms=None,
+        input_root=tmp_path,
+    )
+    assert report["gate_passed"] is False
+    assert any("expected one OpenPI source fingerprint" in item for item in report["violations"])
 
 
 def test_mismatched_policy_and_rollout_commits_are_rejected(tmp_path: Path) -> None:

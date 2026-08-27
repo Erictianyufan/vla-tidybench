@@ -137,6 +137,9 @@ def main() -> int:
             checkpoint=checkpoint,
             checkpoint_sha256=checkpoint_sha256,
             project_commit=project_commit,
+            openpi_source_sha256=(
+                str(training.get("openpi_source_sha256", "")) if training is not None else None
+            ),
         )
 
     if evaluation is not None:

@@ -301,6 +301,12 @@ def main() -> int:
             output.attrs["policy_checkpoint_sha256"] = str(policy_metadata.get("checkpoint_sha256", ""))
             output.attrs["policy_project_commit"] = str(policy_metadata.get("project_commit", ""))
             output.attrs["policy_project_dirty"] = bool(policy_metadata.get("project_dirty", True))
+            output.attrs["policy_runtime_openpi_source_files"] = int(
+                policy_metadata.get("runtime_openpi_source_files", 0)
+            )
+            output.attrs["policy_runtime_openpi_source_sha256"] = str(
+                policy_metadata.get("runtime_openpi_source_sha256", "")
+            )
             output.attrs["rollout_project_commit"] = rollout_project_commit
             output.attrs["rollout_project_dirty"] = rollout_project_dirty
             output.attrs["prompt"] = args_cli.prompt

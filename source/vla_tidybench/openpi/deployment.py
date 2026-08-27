@@ -195,12 +195,29 @@ def validate_training_completion(
             raise ValueError(f"training completion has negative {label}")
 
 
+def validate_openpi_runtime(
+    training: dict[str, Any],
+    *,
+    source_files: int,
+    source_sha256: str,
+) -> None:
+    """Require inference to use the exact OpenPI source tree used for training."""
+
+    try:
+        training_files = int(training.get("openpi_source_files", 0))
+    except (TypeError, ValueError) as error:
+        raise ValueError("training completion has an invalid OpenPI source file count") from error
+    if training_files != source_files or training.get("openpi_source_sha256") != source_sha256:
+        raise ValueError("runtime OpenPI source tree differs from the training source tree")
+
+
 def validate_formal_evaluation(
     evaluation: dict[str, Any],
     *,
     checkpoint: Path,
     checkpoint_sha256: str,
     project_commit: str | None = None,
+    openpi_source_sha256: str | None = None,
 ) -> None:
     """Validate a self-consistent, locked four-skill evaluation report."""
 
@@ -227,6 +244,19 @@ def validate_formal_evaluation(
         raise ValueError("formal evaluation has no valid project commit")
     if project_commit is not None and evaluated_commit != project_commit:
         raise ValueError("formal evaluation project commit does not match deployment code")
+    evaluated_openpi = str(evaluation.get("openpi_source_sha256", ""))
+    try:
+        evaluated_openpi_files = int(evaluation.get("openpi_source_files", 0))
+    except (TypeError, ValueError) as error:
+        raise ValueError("formal evaluation has an invalid OpenPI source fingerprint") from error
+    if (
+        evaluated_openpi_files < 1
+        or len(evaluated_openpi) != 64
+        or any(char not in "0123456789abcdef" for char in evaluated_openpi)
+    ):
+        raise ValueError("formal evaluation has an invalid OpenPI source fingerprint")
+    if openpi_source_sha256 is not None and evaluated_openpi != openpi_source_sha256:
+        raise ValueError("formal evaluation OpenPI source does not match training")
 
     required_skills = evaluation.get("required_skills")
     if not isinstance(required_skills, list) or tuple(required_skills) != FORMAL_SKILLS:
@@ -327,6 +357,10 @@ def validate_formal_evaluation(
             raise ValueError(f"formal evaluation skill {skill} mixes checkpoint content")
         if any(episode.get("project_commit") != evaluated_commit for episode in selected):
             raise ValueError(f"formal evaluation skill {skill} mixes project commits")
+        if any(episode.get("openpi_source_sha256") != evaluated_openpi for episode in selected):
+            raise ValueError(f"formal evaluation skill {skill} mixes OpenPI source trees")
+        if any(int(episode.get("openpi_source_files", 0)) != evaluated_openpi_files for episode in selected):
+            raise ValueError(f"formal evaluation skill {skill} mixes OpenPI source inventories")
         if any(episode.get("success_predicate") != SUCCESS_PREDICATE_VERSION for episode in selected):
             raise ValueError(f"formal evaluation skill {skill} mixes success predicates")
         invalid_hold = any(
@@ -503,6 +537,9 @@ def load_deployment(path: Path, *, require_validated: bool = True) -> Deployment
                 checkpoint=recorded_checkpoint,
                 checkpoint_sha256=checkpoint_sha256,
                 project_commit=str(manifest.get("project_commit", "")),
+                openpi_source_sha256=(
+                    str(training.get("openpi_source_sha256", "")) if training is not None else None
+                ),
             )
 
     return Deployment(root, checkpoint, checkpoint_sha256, policy_mode, manifest, training, evaluation)

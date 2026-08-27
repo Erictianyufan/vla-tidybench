@@ -32,6 +32,8 @@ class Episode:
     checkpoint: str
     checkpoint_sha256: str
     project_commit: str
+    openpi_source_files: int
+    openpi_source_sha256: str
     rollout_project_commit: str
     residual_weight: float
     context: str
@@ -61,6 +63,8 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
         checkpoint = _text(source.attrs.get("policy_checkpoint", ""))
         checkpoint_sha256 = _text(source.attrs.get("policy_checkpoint_sha256", ""))
         project_commit = _text(source.attrs.get("policy_project_commit", ""))
+        openpi_source_files = int(source.attrs.get("policy_runtime_openpi_source_files", 0))
+        openpi_source_sha256 = _text(source.attrs.get("policy_runtime_openpi_source_sha256", ""))
         rollout_project_commit = _text(source.attrs.get("rollout_project_commit", ""))
         residual_weight = float(source.attrs.get("policy_residual_weight", 0.0))
         context_file = _text(source.attrs.get("initial_state_file", ""))
@@ -85,6 +89,13 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
         )
         if not assisted and invalid_commits:
             raise ValueError(f"autonomous rollout has invalid project commit provenance: {path}")
+        invalid_openpi = (
+            openpi_source_files < 1
+            or len(openpi_source_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in openpi_source_sha256)
+        )
+        if not assisted and invalid_openpi:
+            raise ValueError(f"autonomous rollout has invalid OpenPI source provenance: {path}")
         if not assisted and (
             bool(source.attrs.get("policy_project_dirty", True))
             or bool(source.attrs.get("rollout_project_dirty", True))
@@ -144,6 +155,8 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
             checkpoint=checkpoint,
             checkpoint_sha256=checkpoint_sha256,
             project_commit=project_commit,
+            openpi_source_files=openpi_source_files,
+            openpi_source_sha256=openpi_source_sha256,
             rollout_project_commit=rollout_project_commit,
             residual_weight=residual_weight,
             context=context,
@@ -167,6 +180,9 @@ def summarize(
     checkpoints = sorted({episode.checkpoint for episode in episodes if episode.checkpoint})
     checkpoint_digests = sorted({episode.checkpoint_sha256 for episode in episodes if episode.checkpoint_sha256})
     project_commits = sorted({episode.project_commit for episode in episodes if episode.project_commit})
+    openpi_fingerprints = sorted(
+        {(episode.openpi_source_files, episode.openpi_source_sha256) for episode in episodes}
+    )
     if len(policies) != 1:
         violations.append(f"expected one policy, found {policies}")
     if len(checkpoints) != 1:
@@ -175,6 +191,8 @@ def summarize(
         violations.append(f"expected one checkpoint SHA-256, found {checkpoint_digests}")
     if len(project_commits) != 1:
         violations.append(f"expected one project commit, found {project_commits}")
+    if len(openpi_fingerprints) != 1:
+        violations.append(f"expected one OpenPI source fingerprint, found {openpi_fingerprints}")
 
     per_skill: dict[str, object] = {}
     all_timings: list[np.ndarray] = []
@@ -218,6 +236,8 @@ def summarize(
         "checkpoint": checkpoints[0] if len(checkpoints) == 1 else None,
         "checkpoint_sha256": checkpoint_digests[0] if len(checkpoint_digests) == 1 else None,
         "project_commit": project_commits[0] if len(project_commits) == 1 else None,
+        "openpi_source_files": openpi_fingerprints[0][0] if len(openpi_fingerprints) == 1 else None,
+        "openpi_source_sha256": openpi_fingerprints[0][1] if len(openpi_fingerprints) == 1 else None,
         "required_skills": list(required_skills),
         "episode_count": len(used),
         "successes": sum(episode.success for episode in used),
@@ -242,6 +262,8 @@ def summarize(
                 "success_predicate": episode.success_predicate,
                 "checkpoint_sha256": episode.checkpoint_sha256,
                 "project_commit": episode.project_commit,
+                "openpi_source_files": episode.openpi_source_files,
+                "openpi_source_sha256": episode.openpi_source_sha256,
                 "success_hold_steps": episode.success_hold_steps,
                 "success": episode.success,
                 "steps": episode.steps,
