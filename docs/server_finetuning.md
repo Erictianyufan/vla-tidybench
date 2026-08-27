@@ -165,6 +165,19 @@ these only for a deliberate shared-GPU run with
 `PI05_SKIP_GPU_PREFLIGHT=1` is an explicit emergency bypass and is not suitable
 for the memory-constrained three-card full fine-tune.
 
+Inspect the live experiment without parsing terminal output manually:
+
+```bash
+make pi05-experiment-status
+```
+
+This writes
+`$VLA_TIDYBENCH_DATA/logs/pi05-three-stage-status.json` with the active stage,
+latest complete checkpoint per stage, latest tqdm step/rate, detected error
+signals, selected-GPU memory, training PID, and any foreign compute PIDs. Set
+`PI05_STATUS_FLAG=--fail-on-conflict` when using it as a resource gate in an
+external monitor.
+
 Use `TRAIN_STATE_FLAG=--resume` only for a compatible interrupted run. The
 default is `--overwrite`; experiment names are stable per stage so checkpoint
 selection and comparison remain auditable. Resume is evaluated independently
