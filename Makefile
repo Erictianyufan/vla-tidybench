@@ -177,6 +177,7 @@ pi05-export-final:
 	./scripts/run_openpi.sh scripts/export_pi05_checkpoint.py \
 		--checkpoint "$(CHECKPOINT)" --dataset-repo "$(DATASET_REPO)" \
 		--evaluation-report "$(EVAL_REPORT)" --mode $${EXPORT_POLICY_MODE:-full} \
+		$(if $(TRAINING_REPORT),--training-report "$(TRAINING_REPORT)",) \
 		--checkpoint-storage $${EXPORT_STORAGE:-copy} --replace
 
 pi05-verify-deployment:

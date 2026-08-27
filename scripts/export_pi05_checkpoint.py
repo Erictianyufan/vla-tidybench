@@ -18,6 +18,7 @@ from vla_tidybench.openpi.deployment import (
     checkpoint_fingerprint,
     load_deployment,
     validate_formal_evaluation,
+    validate_training_completion,
 )
 
 
@@ -39,6 +40,11 @@ def parse_args() -> argparse.Namespace:
         help="copy creates a portable bundle; symlink avoids duplicating weights on one host",
     )
     parser.add_argument("--evaluation-report", type=Path)
+    parser.add_argument(
+        "--training-report",
+        type=Path,
+        help="defaults to training_completion.json beside the numeric checkpoint",
+    )
     parser.add_argument(
         "--allow-unvalidated",
         action="store_true",
@@ -106,6 +112,23 @@ def main() -> int:
     evaluation: dict[str, object] | None = None
     evaluation_path: Path | None = None
     file_count, byte_count, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
+    training: dict[str, object] | None = None
+    training_path = (args.training_report or checkpoint.parent / "training_completion.json").expanduser().resolve()
+    if training_path.is_file():
+        training = json.loads(training_path.read_text(encoding="utf-8"))
+        if not isinstance(training, dict):
+            raise ValueError("training completion report must be a JSON object")
+        validate_training_completion(
+            training,
+            checkpoint=checkpoint,
+            checkpoint_sha256=checkpoint_sha256,
+            file_count=file_count,
+            byte_count=byte_count,
+            dataset_repo=args.dataset_repo,
+            require_clean_provenance=args.evaluation_report is not None,
+        )
+    elif args.evaluation_report is not None:
+        raise FileNotFoundError(f"formal export requires training completion report: {training_path}")
     if args.evaluation_report is not None:
         evaluation_path = args.evaluation_report.expanduser().resolve()
         evaluation = json.loads(evaluation_path.read_text(encoding="utf-8"))
@@ -142,6 +165,17 @@ def main() -> int:
             checkpoint_entry.symlink_to(checkpoint, target_is_directory=True)
 
         evaluation_manifest: dict[str, object] | None = None
+        training_manifest: dict[str, object] | None = None
+        if training_path.is_file() and training is not None:
+            deployed_training = staging / "training_completion.json"
+            shutil.copyfile(training_path, deployed_training)
+            training_manifest = {
+                "path": "training_completion.json",
+                "sha256": hashlib.sha256(deployed_training.read_bytes()).hexdigest(),
+                "project_commit": training.get("project_commit"),
+                "openpi_source_sha256": training.get("openpi_source_sha256"),
+                "init_params_sha256": training.get("init_params_sha256"),
+            }
         if evaluation_path is not None and evaluation is not None:
             deployed_evaluation = staging / "evaluation.json"
             shutil.copyfile(evaluation_path, deployed_evaluation)
@@ -155,7 +189,7 @@ def main() -> int:
             }
 
         manifest = {
-            "format_version": 2,
+            "format_version": 3,
             "name": args.name,
             "stage": args.stage,
             "dataset_repo": args.dataset_repo,
@@ -173,6 +207,7 @@ def main() -> int:
             "created_at_utc": dt.datetime.now(dt.UTC).isoformat(),
             "project_commit": project_commit,
             "project_dirty": project_dirty,
+            "training": training_manifest,
             "evaluation": evaluation_manifest,
             "serve_command": f"make pi05-deployment-serve DEPLOYMENT={output}",
         }

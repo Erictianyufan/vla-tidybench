@@ -16,6 +16,7 @@ from vla_tidybench.openpi.training_metrics import (
     build_training_provenance,
     source_tree_fingerprint,
     validate_completed_training_run,
+    write_training_completion,
 )
 
 
@@ -166,6 +167,8 @@ def main() -> int:
         dataset_repo=str(metric_metadata["dataset_repo"]),
         metrics_path=metrics_path,
     )
+    completion_path = write_training_completion(Path(str(config.checkpoint_dir)), verified)
+    verified["training_completion"] = str(completion_path)
     print("training_artifacts", json.dumps(verified, sort_keys=True), flush=True)
     return 0
 

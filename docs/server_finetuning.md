@@ -210,9 +210,11 @@ not discard the optimization trace.
 
 Before a newly launched stage process returns success, it verifies the final
 numeric checkpoint, required Orbax metadata, the unique embedded normalization
-asset ID, the dataset identity, and the final JSONL metric step. A missing or
-mismatched artifact makes that stage fail instead of allowing the outer runner
-to advance with an unusable checkpoint.
+asset ID, the dataset identity, the final JSONL metric step, and the full
+checkpoint content hash. It atomically publishes `training_completion.json`
+beside the numeric checkpoints. A missing or mismatched artifact makes that
+stage fail instead of allowing the outer runner to advance with an unusable
+checkpoint.
 
 ## Validation sequence
 
@@ -334,6 +336,10 @@ pi05_tidybench_drawer_four_skill_full/stage3-hard-recovery/2999 \
 
 This creates
 `$VLA_TIDYBENCH_DATA/checkpoints/deploy/pi05-tidybench-final/manifest.json`
+as a format-version-3 bundle. Formal export automatically requires and embeds
+the stage-3 `training_completion.json`; use `TRAINING_REPORT=/absolute/path` only
+when the completion report is stored somewhere other than beside the stage-3
+numeric checkpoint.
 plus a checksum-bound copy of `evaluation.json` and, by default, a complete
 portable copy of the checkpoint weights. Set `EXPORT_STORAGE=symlink` only for
 a same-server deployment where avoiding the additional 12-GB-class copy is

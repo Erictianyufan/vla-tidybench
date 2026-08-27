@@ -9,6 +9,7 @@ from vla_tidybench.openpi.training_metrics import (
     JsonlTrainingMetrics,
     source_tree_fingerprint,
     validate_completed_training_run,
+    write_training_completion,
 )
 
 PROJECT_COMMIT = "d" * 40
@@ -117,6 +118,9 @@ def test_completed_training_run_binds_checkpoint_metrics_and_assets(tmp_path: Pa
     assert report["final_step"] == 2
     assert report["checkpoint_asset_id"] == dataset_repo
     assert report["loss"] == pytest.approx(1.0)
+    assert report["checkpoint_sha256"]
+    completion_path = write_training_completion(run_dir, report)
+    assert json.loads(completion_path.read_text(encoding="utf-8"))["verified"] is True
 
 
 def test_completed_training_run_rejects_wrong_checkpoint_assets(tmp_path: Path) -> None:
@@ -154,6 +158,25 @@ def test_formal_training_requires_source_provenance(tmp_path: Path) -> None:
             dataset_repo=dataset_repo,
             metrics_path=metrics_path,
         )
+
+
+def test_synthetic_smoke_completion_does_not_require_clean_provenance(tmp_path: Path) -> None:
+    run_dir = tmp_path / "smoke"
+    write_complete_checkpoint(run_dir / "0", "fake")
+    metrics_path = run_dir / "train_metrics.jsonl"
+    JsonlTrainingMetrics(
+        metrics_path,
+        {"dataset_repo": "fake", "num_train_steps": 1},
+    ).log(payload(), step=0)
+
+    report = validate_completed_training_run(
+        run_dir,
+        num_train_steps=1,
+        dataset_repo="fake",
+        metrics_path=metrics_path,
+    )
+
+    assert report["verified"] is True
 
 
 def test_source_tree_fingerprint_is_content_bound(tmp_path: Path) -> None:

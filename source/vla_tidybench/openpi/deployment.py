@@ -31,6 +31,7 @@ class Deployment:
     checkpoint_sha256: str
     policy_mode: str
     manifest: dict[str, Any]
+    training: dict[str, Any] | None
     evaluation: dict[str, Any] | None
 
 
@@ -115,6 +116,68 @@ def _number(value: object, label: str) -> float:
     if not math.isfinite(result):
         raise ValueError(f"formal evaluation has non-finite {label}")
     return result
+
+
+def validate_training_completion(
+    training: dict[str, Any],
+    *,
+    checkpoint: Path,
+    checkpoint_sha256: str,
+    file_count: int,
+    byte_count: int,
+    dataset_repo: str,
+    require_clean_provenance: bool = True,
+) -> None:
+    """Validate a content-bound completion report for one formal training stage."""
+
+    if int(training.get("schema_version", -1)) != 1 or training.get("verified") is not True:
+        raise ValueError("formal deployment has no verified training completion report")
+    checkpoint = checkpoint.expanduser().resolve()
+    recorded_checkpoint = Path(str(training.get("checkpoint", ""))).expanduser().resolve()
+    if recorded_checkpoint != checkpoint:
+        raise ValueError("training completion checkpoint does not match deployment checkpoint")
+    try:
+        final_step = int(training.get("final_step", -1))
+        num_train_steps = int(training.get("num_train_steps", -1))
+        recorded_files = int(training.get("checkpoint_file_count", -1))
+        recorded_bytes = int(training.get("checkpoint_byte_count", -1))
+    except (TypeError, ValueError) as error:
+        raise ValueError("training completion has invalid numeric identities") from error
+    if not checkpoint.name.isdigit() or final_step != int(checkpoint.name):
+        raise ValueError("training completion final step does not match its checkpoint")
+    if num_train_steps != final_step + 1:
+        raise ValueError("training completion step count is inconsistent")
+    if training.get("dataset_repo") != dataset_repo:
+        raise ValueError("training completion dataset does not match deployment dataset")
+    if training.get("checkpoint_digest_algorithm") != CHECKPOINT_DIGEST_ALGORITHM:
+        raise ValueError("training completion uses an unsupported checkpoint digest")
+    if training.get("checkpoint_sha256") != checkpoint_sha256:
+        raise ValueError("training completion checkpoint SHA-256 does not match deployed content")
+    if recorded_files != file_count or recorded_bytes != byte_count:
+        raise ValueError("training completion checkpoint inventory does not match deployed content")
+    if require_clean_provenance:
+        project_commit = str(training.get("project_commit", ""))
+        valid_commit = len(project_commit) in (40, 64) and all(
+            char in "0123456789abcdef" for char in project_commit
+        )
+        if not valid_commit or training.get("project_dirty") is not False:
+            raise ValueError("training completion requires an exact clean project commit")
+        for label in ("openpi_source", "init_params"):
+            digest = str(training.get(f"{label}_sha256", ""))
+            try:
+                count = int(training.get(f"{label}_files", 0))
+            except (TypeError, ValueError) as error:
+                raise ValueError(f"training completion has invalid {label} fingerprint") from error
+            if (
+                len(digest) != 64
+                or any(char not in "0123456789abcdef" for char in digest)
+                or count < 1
+            ):
+                raise ValueError(f"training completion has invalid {label} fingerprint")
+    for label in ("loss", "grad_norm", "param_norm"):
+        value = _number(training.get(label), f"training {label}")
+        if value < 0:
+            raise ValueError(f"training completion has negative {label}")
 
 
 def validate_formal_evaluation(
@@ -301,10 +364,10 @@ def load_deployment(path: Path, *, require_validated: bool = True) -> Deployment
     manifest_path = root / "manifest.json"
     manifest = _load_json(manifest_path, "deployment manifest")
     format_version = int(manifest.get("format_version", -1))
-    if format_version not in (1, 2):
+    if format_version not in (1, 2, 3):
         raise ValueError(f"unsupported deployment format_version in {manifest_path}")
-    if require_validated and format_version != 2:
-        raise ValueError("formal deployment requires content-hashed format_version 2")
+    if require_validated and format_version != 3:
+        raise ValueError("formal deployment requires provenance-bound format_version 3")
 
     policy_mode = str(manifest.get("policy_mode", ""))
     if policy_mode not in POLICY_MODES:
@@ -364,13 +427,41 @@ def load_deployment(path: Path, *, require_validated: bool = True) -> Deployment
     if byte_count != int(manifest.get("byte_count", -1)):
         raise ValueError(f"checkpoint byte count changed: expected {manifest.get('byte_count')}, got {byte_count}")
     checkpoint_digest = manifest.get("checkpoint_digest")
-    if format_version == 2:
+    if format_version >= 2:
         if not isinstance(checkpoint_digest, dict):
             raise ValueError("deployment checkpoint_digest must be an object")
         if checkpoint_digest.get("algorithm") != CHECKPOINT_DIGEST_ALGORITHM:
             raise ValueError("unsupported deployment checkpoint digest algorithm")
         if checkpoint_digest.get("sha256") != checkpoint_sha256:
             raise ValueError("checkpoint content SHA-256 does not match deployment manifest")
+
+    training_manifest = manifest.get("training")
+    training: dict[str, Any] | None = None
+    if training_manifest is None:
+        if require_validated:
+            raise ValueError("formal deployment has no training completion record")
+    else:
+        if not isinstance(training_manifest, dict):
+            raise ValueError("deployment training entry must be an object")
+        if training_manifest.get("path") != "training_completion.json":
+            raise ValueError("deployment training entry has an invalid path")
+        training_path = root / "training_completion.json"
+        training = _load_json(training_path, "training completion")
+        digest = hashlib.sha256(training_path.read_bytes()).hexdigest()
+        if digest != training_manifest.get("sha256"):
+            raise ValueError("training completion checksum does not match deployment manifest")
+        validate_training_completion(
+            training,
+            checkpoint=recorded_checkpoint,
+            checkpoint_sha256=checkpoint_sha256,
+            file_count=file_count,
+            byte_count=byte_count,
+            dataset_repo=str(manifest.get("dataset_repo", "")),
+            require_clean_provenance=require_validated,
+        )
+        for key in ("project_commit", "openpi_source_sha256", "init_params_sha256"):
+            if training_manifest.get(key) != training.get(key):
+                raise ValueError(f"deployment training identity disagrees for {key}")
 
     evaluation_manifest = manifest.get("evaluation")
     evaluation: dict[str, Any] | None = None
@@ -385,7 +476,7 @@ def load_deployment(path: Path, *, require_validated: bool = True) -> Deployment
         digest = hashlib.sha256(evaluation_path.read_bytes()).hexdigest()
         if digest != evaluation_manifest.get("sha256"):
             raise ValueError("evaluation checksum does not match deployment manifest")
-        if format_version == 2:
+        if format_version >= 2:
             validate_formal_evaluation(
                 evaluation,
                 checkpoint=recorded_checkpoint,
@@ -393,4 +484,4 @@ def load_deployment(path: Path, *, require_validated: bool = True) -> Deployment
                 project_commit=str(manifest.get("project_commit", "")),
             )
 
-    return Deployment(root, checkpoint, checkpoint_sha256, policy_mode, manifest, evaluation)
+    return Deployment(root, checkpoint, checkpoint_sha256, policy_mode, manifest, training, evaluation)

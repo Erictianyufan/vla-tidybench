@@ -99,6 +99,33 @@ def formal_evaluation(checkpoint: Path, checkpoint_sha256: str) -> dict[str, obj
     }
 
 
+def training_completion(
+    checkpoint: Path, checkpoint_sha256: str, file_count: int, byte_count: int
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "verified": True,
+        "checkpoint": str(checkpoint.resolve()),
+        "final_step": int(checkpoint.name),
+        "num_train_steps": int(checkpoint.name) + 1,
+        "dataset_repo": "owner/data",
+        "checkpoint_digest_algorithm": CHECKPOINT_DIGEST_ALGORITHM,
+        "checkpoint_file_count": file_count,
+        "checkpoint_byte_count": byte_count,
+        "checkpoint_sha256": checkpoint_sha256,
+        "project_commit": PROJECT_COMMIT,
+        "project_dirty": False,
+        "openpi_source_files": 72,
+        "openpi_source_sha256": "a" * 64,
+        "init_params": "/checkpoints/stage2/9999/params",
+        "init_params_files": 10,
+        "init_params_sha256": "b" * 64,
+        "loss": 0.1,
+        "grad_norm": 1.0,
+        "param_norm": 2.0,
+    }
+
+
 def make_deployment(tmp_path: Path, *, validated: bool = True) -> Path:
     checkpoint = tmp_path / "runs" / "stage3" / "2999"
     write_checkpoint(checkpoint)
@@ -110,14 +137,25 @@ def make_deployment(tmp_path: Path, *, validated: bool = True) -> Path:
         pytest.skip(f"symbolic links unavailable: {error}")
 
     evaluation_manifest = None
+    training_manifest = None
     file_count, byte_count, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
     if validated:
+        training = training_completion(checkpoint, checkpoint_sha256, file_count, byte_count)
+        training_path = deployment / "training_completion.json"
+        training_path.write_text(json.dumps(training), encoding="utf-8")
+        training_manifest = {
+            "path": "training_completion.json",
+            "sha256": hashlib.sha256(training_path.read_bytes()).hexdigest(),
+            "project_commit": training["project_commit"],
+            "openpi_source_sha256": training["openpi_source_sha256"],
+            "init_params_sha256": training["init_params_sha256"],
+        }
         evaluation = formal_evaluation(checkpoint, checkpoint_sha256)
         evaluation_path = deployment / "evaluation.json"
         evaluation_path.write_text(json.dumps(evaluation), encoding="utf-8")
         evaluation_manifest = {"sha256": hashlib.sha256(evaluation_path.read_bytes()).hexdigest()}
     manifest = {
-        "format_version": 2,
+        "format_version": 3,
         "stage": "stage3-hard-recovery",
         "dataset_repo": "owner/data",
         "policy_mode": "full",
@@ -131,6 +169,7 @@ def make_deployment(tmp_path: Path, *, validated: bool = True) -> Path:
         },
         "project_dirty": False,
         "project_commit": PROJECT_COMMIT,
+        "training": training_manifest,
         "evaluation": evaluation_manifest,
     }
     (deployment / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
@@ -140,6 +179,7 @@ def make_deployment(tmp_path: Path, *, validated: bool = True) -> Path:
 def test_validated_deployment_is_accepted(tmp_path: Path) -> None:
     deployment = load_deployment(make_deployment(tmp_path))
     assert deployment.policy_mode == "full"
+    assert deployment.training is not None
     assert deployment.evaluation is not None
     assert deployment.checkpoint.name == "2999"
     assert checkpoint_asset_id(deployment.checkpoint) == "owner/data"
@@ -173,6 +213,24 @@ def test_modified_evaluation_is_rejected(tmp_path: Path) -> None:
         load_deployment(deployment)
 
 
+def test_modified_training_completion_is_rejected(tmp_path: Path) -> None:
+    deployment = make_deployment(tmp_path)
+    (deployment / "training_completion.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="training completion checksum"):
+        load_deployment(deployment)
+
+
+def test_training_identity_must_match_embedded_completion(tmp_path: Path) -> None:
+    deployment = make_deployment(tmp_path)
+    manifest_path = deployment / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["training"]["project_commit"] = "e" * 40
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="training identity disagrees"):
+        load_deployment(deployment)
+
+
 def test_same_size_checkpoint_mutation_is_rejected(tmp_path: Path) -> None:
     deployment = make_deployment(tmp_path)
     checkpoint = (deployment / "checkpoint").resolve()
@@ -199,7 +257,7 @@ def test_weakened_evaluation_threshold_is_rejected(tmp_path: Path) -> None:
 
 def test_unvalidated_bundle_requires_explicit_opt_out(tmp_path: Path) -> None:
     deployment = make_deployment(tmp_path, validated=False)
-    with pytest.raises(ValueError, match="no evaluation"):
+    with pytest.raises(ValueError, match="no training completion"):
         load_deployment(deployment)
     assert load_deployment(deployment, require_validated=False).evaluation is None
 
@@ -211,7 +269,7 @@ def test_legacy_bundle_is_never_a_formal_deployment(tmp_path: Path) -> None:
     manifest["format_version"] = 1
     manifest.pop("checkpoint_digest")
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    with pytest.raises(ValueError, match="format_version 2"):
+    with pytest.raises(ValueError, match="format_version 3"):
         load_deployment(deployment)
     assert load_deployment(deployment, require_validated=False).checkpoint.name == "2999"
 
@@ -220,6 +278,12 @@ def test_export_binds_evaluated_checkpoint_content(tmp_path: Path, monkeypatch: 
     checkpoint = tmp_path / "runs" / "stage3" / "2999"
     write_checkpoint(checkpoint)
     _, _, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
+    file_count, byte_count, _ = checkpoint_fingerprint(checkpoint)
+    training_path = checkpoint.parent / "training_completion.json"
+    training_path.write_text(
+        json.dumps(training_completion(checkpoint, checkpoint_sha256, file_count, byte_count)),
+        encoding="utf-8",
+    )
     evaluation_path = tmp_path / "evaluation.json"
     evaluation_path.write_text(json.dumps(formal_evaluation(checkpoint, checkpoint_sha256)), encoding="utf-8")
 
@@ -245,7 +309,8 @@ def test_export_binds_evaluated_checkpoint_content(tmp_path: Path, monkeypatch: 
     exporter.main()
 
     deployment = load_deployment(tmp_path / "deploy" / "pi05-tidybench-final")
-    assert deployment.manifest["format_version"] == 2
+    assert deployment.manifest["format_version"] == 3
+    assert deployment.training is not None
     assert deployment.manifest["checkpoint_storage"] == "copy"
     assert not (deployment.root / "checkpoint").is_symlink()
     assert deployment.checkpoint_sha256 == checkpoint_sha256

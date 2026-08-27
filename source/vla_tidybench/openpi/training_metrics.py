@@ -13,9 +13,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from vla_tidybench.openpi.deployment import REQUIRED_CHECKPOINT_FILES, checkpoint_asset_id
+from vla_tidybench.openpi.deployment import (
+    CHECKPOINT_DIGEST_ALGORITHM,
+    REQUIRED_CHECKPOINT_FILES,
+    checkpoint_asset_id,
+    checkpoint_fingerprint,
+    validate_training_completion,
+)
 
 METRIC_KEYS = ("loss", "grad_norm", "param_norm")
+TRAINING_COMPLETION_FILENAME = "training_completion.json"
 OPENPI_PROVENANCE_PATHS = (
     Path("scripts/train.py"),
     Path("src/openpi"),
@@ -207,11 +214,19 @@ def validate_completed_training_run(
     ]
     if nonfinite:
         raise ValueError(f"final training metrics are non-finite: {nonfinite}")
-    return {
+    file_count, byte_count, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
+    report = {
+        "schema_version": 1,
+        "created_at_utc": dt.datetime.now(dt.UTC).isoformat(),
         "checkpoint": str(checkpoint),
         "final_step": final_step,
+        "num_train_steps": num_train_steps,
         "dataset_repo": dataset_repo,
         "checkpoint_asset_id": asset_id,
+        "checkpoint_digest_algorithm": CHECKPOINT_DIGEST_ALGORITHM,
+        "checkpoint_file_count": file_count,
+        "checkpoint_byte_count": byte_count,
+        "checkpoint_sha256": checkpoint_sha256,
         "metrics_path": str(metrics_path),
         "loss": float(final_metrics["loss"]),
         "grad_norm": float(final_metrics["grad_norm"]),
@@ -225,3 +240,23 @@ def validate_completed_training_run(
         "init_params_sha256": final_metrics.get("init_params_sha256"),
         "verified": True,
     }
+    validate_training_completion(
+        report,
+        checkpoint=checkpoint,
+        checkpoint_sha256=checkpoint_sha256,
+        file_count=file_count,
+        byte_count=byte_count,
+        dataset_repo=dataset_repo,
+        require_clean_provenance=dataset_repo != "fake",
+    )
+    return report
+
+
+def write_training_completion(run_dir: Path, report: Mapping[str, Any]) -> Path:
+    """Atomically publish the durable completion report beside stage checkpoints."""
+
+    output = run_dir.expanduser().resolve() / TRAINING_COMPLETION_FILENAME
+    temporary = output.with_name(f".{output.name}.{uuid.uuid4().hex}.tmp")
+    temporary.write_text(json.dumps(dict(report), indent=2) + "\n", encoding="utf-8")
+    temporary.replace(output)
+    return output
