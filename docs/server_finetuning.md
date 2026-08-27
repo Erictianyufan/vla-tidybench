@@ -156,6 +156,15 @@ make pi05-three-stage-train \
   HARD_DATASET_REPO=scuee_user06/vla_tidybench_drawer_v1_hard_mix
 ```
 
+Every newly launched stage checks the physical indices in
+`CUDA_VISIBLE_DEVICES` before importing JAX. It waits until each selected GPU
+has no other compute PID and at most `512 MiB` of baseline memory, reporting
+the occupying PIDs every 30 seconds. The default timeout is six hours. Override
+these only for a deliberate shared-GPU run with
+`PI05_GPU_PREFLIGHT_MAX_USED_MIB` and `PI05_GPU_PREFLIGHT_TIMEOUT_S`;
+`PI05_SKIP_GPU_PREFLIGHT=1` is an explicit emergency bypass and is not suitable
+for the memory-constrained three-card full fine-tune.
+
 Use `TRAIN_STATE_FLAG=--resume` only for a compatible interrupted run. The
 default is `--overwrite`; experiment names are stable per stage so checkpoint
 selection and comparison remain auditable. Resume is evaluated independently

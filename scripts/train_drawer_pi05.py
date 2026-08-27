@@ -10,8 +10,7 @@ import json
 import os
 from pathlib import Path
 
-from vla_tidybench.openpi.drawer_config import make_config as make_open_config
-from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
+from vla_tidybench.openpi.gpu_preflight import selected_gpu_indices, wait_for_exclusive_gpus
 from vla_tidybench.openpi.training_metrics import JsonlTrainingMetrics, validate_completed_training_run
 
 
@@ -58,6 +57,18 @@ def main() -> int:
         parser.error("fsdp-min-size-mbytes must be non-negative")
     if args.overwrite and args.resume:
         parser.error("overwrite and resume are mutually exclusive")
+
+    max_used_mib = int(os.environ.get("PI05_GPU_PREFLIGHT_MAX_USED_MIB", "512"))
+    timeout_s = float(os.environ.get("PI05_GPU_PREFLIGHT_TIMEOUT_S", "21600"))
+    if os.environ.get("PI05_SKIP_GPU_PREFLIGHT") != "1":
+        wait_for_exclusive_gpus(
+            selected_gpu_indices(),
+            max_used_mib=max_used_mib,
+            timeout_s=timeout_s,
+        )
+
+    from vla_tidybench.openpi.drawer_config import make_config as make_open_config
+    from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
 
     if args.dataset_repo:
         env_name = (
