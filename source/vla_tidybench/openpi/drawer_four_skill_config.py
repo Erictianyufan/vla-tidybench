@@ -16,7 +16,7 @@ CONFIG_NAME = CONFIG_NAMES["lora"]
 REPO_ID = "erictianyufan/vla_tidybench_drawer_four_skill_mvp"
 
 
-def make_config(*, finetune_mode: str = "lora", **kwargs):
+def make_config(*, finetune_mode: str = "lora", dataset_repo: str | None = None, **kwargs):
     """Reuse the audited pi0.5 architecture with an isolated multi-skill dataset."""
 
     config = make_stack_config(finetune_mode=finetune_mode, **kwargs)
@@ -24,6 +24,7 @@ def make_config(*, finetune_mode: str = "lora", **kwargs):
     if data.repo_id != "fake":
         data = replace(
             data,
-            repo_id=os.environ.get("VLA_TIDYBENCH_DRAWER_FOUR_SKILL_REPO_ID", REPO_ID),
+            repo_id=dataset_repo
+            or os.environ.get("VLA_TIDYBENCH_DRAWER_FOUR_SKILL_REPO_ID", REPO_ID),
         )
     return replace(config, name=CONFIG_NAMES[finetune_mode], data=data)

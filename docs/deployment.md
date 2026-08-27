@@ -62,6 +62,13 @@ deployment that remains on the training server. Export verifies the copied
 tree before atomically publishing it; replacement preserves the previous
 deployment if staging or verification fails.
 
+The formal manifest's `dataset_repo` must match the single normalization asset
+ID embedded below `checkpoint/assets`. The verifier enforces this equality and
+the policy server passes the verified ID into the reconstructed training
+configuration before OpenPI restores normalization statistics. This prevents a
+valid weight tree from being served with statistics from a default or stale
+dataset.
+
 ## Known vendor-image constraints
 
 - `isaaclab.sh` fails if `/home/ubuntu/env_isaaclab` is not activated first.

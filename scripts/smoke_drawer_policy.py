@@ -10,6 +10,7 @@ import h5py
 import numpy as np
 from openpi.policies import policy_config
 from openpi.shared import normalize
+from vla_tidybench.openpi.deployment import checkpoint_asset_id
 from vla_tidybench.openpi.drawer_config import make_config as make_open_config
 from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
 
@@ -56,14 +57,21 @@ def main() -> int:
     parser.add_argument("--prompt", default="open the top drawer")
     parser.add_argument("--four-skill", action="store_true")
     parser.add_argument("--mode", choices=("lora", "expert", "full"), default="expert")
+    parser.add_argument(
+        "--dataset-repo",
+        help="normalization asset ID; non-synthetic checkpoints auto-discover it when omitted",
+    )
     parser.add_argument("--runs", type=int, default=2, help="include at least one post-JIT timing sample")
     args = parser.parse_args()
     if args.runs < 1:
         parser.error("--runs must be positive")
     request = synthetic_request(args.prompt) if args.synthetic else dataset_request(args.dataset, args.prompt)
     make_config = make_four_skill_config if args.four_skill else make_open_config
+    dataset_repo = args.dataset_repo
+    if dataset_repo is None and not args.synthetic:
+        dataset_repo = checkpoint_asset_id(args.checkpoint)
     policy = policy_config.create_trained_policy(
-        make_config(finetune_mode=args.mode),
+        make_config(finetune_mode=args.mode, dataset_repo=dataset_repo),
         args.checkpoint,
         norm_stats=identity_norm_stats() if args.synthetic else None,
     )

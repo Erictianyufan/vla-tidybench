@@ -43,6 +43,13 @@ def test_invalid_finetune_mode_is_rejected() -> None:
         make_config(finetune_mode="unsupported")
 
 
+def test_explicit_dataset_repo_overrides_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VLA_TIDYBENCH_DRAWER_FOUR_SKILL_REPO_ID", "owner/environment")
+    config = make_config(dataset_repo="owner/checkpoint")
+
+    assert config.data.repo_id == "owner/checkpoint"
+
+
 def test_full_ema_is_an_explicit_high_memory_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PI05_EMA_DECAY", "0.99")
     assert make_config(finetune_mode="full").ema_decay == 0.99

@@ -16,11 +16,14 @@ CONFIG_NAME = CONFIG_NAMES["lora"]
 REPO_ID = "erictianyufan/vla_tidybench_drawer_m2_smoke"
 
 
-def make_config(*, finetune_mode: str = "lora", **kwargs):
+def make_config(*, finetune_mode: str = "lora", dataset_repo: str | None = None, **kwargs):
     """Reuse the audited π0.5 architecture/checkpoint with drawer data."""
 
     config = make_stack_config(finetune_mode=finetune_mode, **kwargs)
     data = config.data
     if data.repo_id != "fake":
-        data = replace(data, repo_id=os.environ.get("VLA_TIDYBENCH_DRAWER_REPO_ID", REPO_ID))
+        data = replace(
+            data,
+            repo_id=dataset_repo or os.environ.get("VLA_TIDYBENCH_DRAWER_REPO_ID", REPO_ID),
+        )
     return replace(config, name=CONFIG_NAMES[finetune_mode], data=data)

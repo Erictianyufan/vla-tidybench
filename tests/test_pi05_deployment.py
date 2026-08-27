@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from vla_tidybench.openpi.deployment import (
     CHECKPOINT_DIGEST_ALGORITHM,
+    checkpoint_asset_id,
     checkpoint_fingerprint,
     load_deployment,
 )
@@ -27,9 +28,11 @@ EXPORT_SPEC.loader.exec_module(exporter)
 
 def write_checkpoint(path: Path) -> None:
     (path / "params").mkdir(parents=True)
+    (path / "assets" / "owner" / "data").mkdir(parents=True)
     (path / "_CHECKPOINT_METADATA").write_text("checkpoint", encoding="utf-8")
     (path / "params" / "_METADATA").write_text("params", encoding="utf-8")
     (path / "params" / "manifest.ocdbt").write_text("manifest", encoding="utf-8")
+    (path / "assets" / "owner" / "data" / "norm_stats.json").write_text("{}", encoding="utf-8")
 
 
 def formal_evaluation(checkpoint: Path, checkpoint_sha256: str) -> dict[str, object]:
@@ -114,6 +117,28 @@ def test_validated_deployment_is_accepted(tmp_path: Path) -> None:
     assert deployment.policy_mode == "full"
     assert deployment.evaluation is not None
     assert deployment.checkpoint.name == "2999"
+    assert checkpoint_asset_id(deployment.checkpoint) == "owner/data"
+
+
+def test_dataset_repo_must_match_embedded_normalization_assets(tmp_path: Path) -> None:
+    deployment = make_deployment(tmp_path)
+    manifest_path = deployment / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["dataset_repo"] = "owner/wrong"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="normalization asset ID"):
+        load_deployment(deployment)
+
+
+def test_checkpoint_requires_one_unambiguous_normalization_asset(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "checkpoint"
+    write_checkpoint(checkpoint)
+    (checkpoint / "assets" / "owner" / "other").mkdir(parents=True)
+    (checkpoint / "assets" / "owner" / "other" / "norm_stats.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="exactly one"):
+        checkpoint_asset_id(checkpoint)
 
 
 def test_modified_evaluation_is_rejected(tmp_path: Path) -> None:
@@ -264,3 +289,10 @@ def test_policy_probe_checks_action_shape_and_checkpoint_metadata() -> None:
     assert 'metadata.get("checkpoint")' in source
     assert 'metadata.get("checkpoint_sha256", "")' in source
     assert 'metadata.get("evaluation_gate_passed"' in source
+
+
+def test_policy_server_binds_config_to_checkpoint_dataset_assets() -> None:
+    source = (ROOT / "scripts" / "serve_drawer_policy.py").read_text(encoding="utf-8")
+    assert 'dataset_repo = str(deployment.manifest["dataset_repo"])' in source
+    assert "args.dataset_repo or checkpoint_asset_id(checkpoint)" in source
+    assert "make_config(finetune_mode=mode, dataset_repo=dataset_repo)" in source

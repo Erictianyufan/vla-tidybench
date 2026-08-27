@@ -39,6 +39,27 @@ def checkpoint_inventory(checkpoint: Path) -> tuple[int, int]:
     return len(files), sum(path.stat().st_size for path in files)
 
 
+def checkpoint_asset_id(checkpoint: Path) -> str:
+    """Return the unique normalization asset ID embedded in a checkpoint."""
+
+    assets = checkpoint.expanduser().resolve() / "assets"
+    if not assets.is_dir() or assets.is_symlink():
+        raise ValueError(f"checkpoint has no real assets directory: {assets}")
+    entries = list(assets.rglob("*"))
+    symlinks = [path for path in entries if path.is_symlink()]
+    if symlinks:
+        raise ValueError(f"checkpoint assets contain symbolic links: {symlinks[0]}")
+    norm_stats = [path for path in entries if path.is_file() and path.name == "norm_stats.json"]
+    if len(norm_stats) != 1:
+        raise ValueError(
+            f"checkpoint must contain exactly one norm_stats.json, found {len(norm_stats)} under {assets}"
+        )
+    asset_id = norm_stats[0].parent.relative_to(assets).as_posix()
+    if not asset_id or asset_id == ".":
+        raise ValueError("checkpoint normalization assets must be stored under a non-empty asset ID")
+    return asset_id
+
+
 def _checkpoint_files(checkpoint: Path) -> list[Path]:
     checkpoint = checkpoint.expanduser().resolve()
     entries = list(checkpoint.rglob("*"))
@@ -256,6 +277,12 @@ def load_deployment(path: Path, *, require_validated: bool = True) -> Deployment
     ]
     if missing:
         raise ValueError("deployment checkpoint is incomplete; missing: " + ", ".join(missing))
+    embedded_asset_id = checkpoint_asset_id(checkpoint)
+    if require_validated and manifest.get("dataset_repo") != embedded_asset_id:
+        raise ValueError(
+            "formal deployment dataset_repo does not match checkpoint normalization asset ID: "
+            f"{manifest.get('dataset_repo')!r} != {embedded_asset_id!r}"
+        )
 
     file_count, byte_count, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
     if file_count != int(manifest.get("file_count", -1)):

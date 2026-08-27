@@ -312,7 +312,12 @@ POLICY_PROBE_FLAG="--expect-deployment $DEPLOYMENT --require-evaluation --max-la
 The verifier resolves the checkpoint link, checks required Orbax metadata,
 file count, byte count, the complete checkpoint tree SHA-256, clean-code
 provenance, evaluation SHA-256, autonomous-only status, gate result, and exact
-evaluated checkpoint identity before model construction. Hashing the final
+evaluated checkpoint identity before model construction. It also requires the
+manifest dataset repository to equal the checkpoint's unique embedded
+normalization asset ID; the policy configuration is constructed with that ID,
+so stage-3 hard-mix statistics cannot silently fall back to the MVP or nominal
+dataset statistics. Direct-checkpoint serving discovers the same ID from the
+checkpoint when `--dataset-repo` is omitted. Hashing the final
 12-GB-class checkpoint can take roughly one to two minutes on a mechanical
 disk. Policy mode and four-skill configuration are taken from the manifest, so
 a full checkpoint cannot accidentally be loaded as an expert or LoRA model.

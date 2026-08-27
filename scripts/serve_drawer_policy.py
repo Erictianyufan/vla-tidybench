@@ -11,7 +11,11 @@ import numpy as np
 from openpi.policies import policy_config
 from openpi.serving.websocket_policy_server import WebsocketPolicyServer
 from openpi.shared import normalize
-from vla_tidybench.openpi.deployment import checkpoint_fingerprint, load_deployment
+from vla_tidybench.openpi.deployment import (
+    checkpoint_asset_id,
+    checkpoint_fingerprint,
+    load_deployment,
+)
 from vla_tidybench.openpi.drawer_config import make_config as make_open_config
 from vla_tidybench.openpi.drawer_four_skill_config import make_config as make_four_skill_config
 
@@ -33,6 +37,10 @@ def main() -> None:
     parser.add_argument("--default-prompt", default="open the top drawer")
     parser.add_argument("--four-skill", action="store_true")
     parser.add_argument("--mode", choices=("lora", "expert", "full"))
+    parser.add_argument(
+        "--dataset-repo",
+        help="normalization asset ID; direct checkpoints auto-discover it when omitted",
+    )
     parser.add_argument(
         "--allow-unvalidated-deployment",
         action="store_true",
@@ -58,16 +66,18 @@ def main() -> None:
         checkpoint_sha256 = deployment.checkpoint_sha256
         mode = deployment.policy_mode
         four_skill = True
+        dataset_repo = str(deployment.manifest["dataset_repo"])
     else:
         assert args.checkpoint is not None
         checkpoint = args.checkpoint.expanduser().resolve()
         _, _, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
         mode = args.mode or "expert"
         four_skill = args.four_skill
+        dataset_repo = args.dataset_repo or checkpoint_asset_id(checkpoint)
 
     make_config = make_four_skill_config if four_skill else make_open_config
     policy = policy_config.create_trained_policy(
-        make_config(finetune_mode=mode),
+        make_config(finetune_mode=mode, dataset_repo=dataset_repo),
         checkpoint,
         default_prompt=args.default_prompt,
         norm_stats=identity_norm_stats() if args.synthetic_identity_norm else None,
@@ -79,6 +89,7 @@ def main() -> None:
             "policy": f"pi0.5-drawer-{mode}",
             "checkpoint": str(checkpoint),
             "checkpoint_sha256": checkpoint_sha256,
+            "dataset_repo": dataset_repo,
             "deployment": str(deployment.root) if deployment is not None else None,
             "evaluation_gate_passed": bool(deployment and deployment.evaluation),
             "synthetic_identity_norm": args.synthetic_identity_norm,
