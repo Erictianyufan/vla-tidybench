@@ -120,6 +120,11 @@ def training_completion(
         "init_params": "/checkpoints/stage2/9999/params",
         "init_params_files": 10,
         "init_params_sha256": "b" * 64,
+        "dataset_path": "/datasets/owner/data",
+        "dataset_digest_algorithm": CHECKPOINT_DIGEST_ALGORITHM,
+        "dataset_files": 20,
+        "dataset_bytes": 30,
+        "dataset_sha256": "e" * 64,
         "loss": 0.1,
         "grad_norm": 1.0,
         "param_norm": 2.0,
@@ -149,6 +154,8 @@ def make_deployment(tmp_path: Path, *, validated: bool = True) -> Path:
             "project_commit": training["project_commit"],
             "openpi_source_sha256": training["openpi_source_sha256"],
             "init_params_sha256": training["init_params_sha256"],
+            "dataset_digest_algorithm": training["dataset_digest_algorithm"],
+            "dataset_sha256": training["dataset_sha256"],
         }
         evaluation = formal_evaluation(checkpoint, checkpoint_sha256)
         evaluation_path = deployment / "evaluation.json"

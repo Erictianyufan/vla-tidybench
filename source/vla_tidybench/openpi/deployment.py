@@ -174,6 +174,21 @@ def validate_training_completion(
                 or count < 1
             ):
                 raise ValueError(f"training completion has invalid {label} fingerprint")
+        dataset_digest = str(training.get("dataset_sha256", ""))
+        try:
+            dataset_files = int(training.get("dataset_files", 0))
+            dataset_bytes = int(training.get("dataset_bytes", 0))
+        except (TypeError, ValueError) as error:
+            raise ValueError("training completion has an invalid dataset fingerprint") from error
+        if (
+            not str(training.get("dataset_path", "")).strip()
+            or training.get("dataset_digest_algorithm") != CHECKPOINT_DIGEST_ALGORITHM
+            or len(dataset_digest) != 64
+            or any(char not in "0123456789abcdef" for char in dataset_digest)
+            or dataset_files < 1
+            or dataset_bytes < 1
+        ):
+            raise ValueError("training completion has an invalid dataset fingerprint")
     for label in ("loss", "grad_norm", "param_norm"):
         value = _number(training.get(label), f"training {label}")
         if value < 0:
@@ -459,7 +474,13 @@ def load_deployment(path: Path, *, require_validated: bool = True) -> Deployment
             dataset_repo=str(manifest.get("dataset_repo", "")),
             require_clean_provenance=require_validated,
         )
-        for key in ("project_commit", "openpi_source_sha256", "init_params_sha256"):
+        for key in (
+            "project_commit",
+            "openpi_source_sha256",
+            "init_params_sha256",
+            "dataset_digest_algorithm",
+            "dataset_sha256",
+        ):
             if training_manifest.get(key) != training.get(key):
                 raise ValueError(f"deployment training identity disagrees for {key}")
 

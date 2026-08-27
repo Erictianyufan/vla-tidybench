@@ -175,6 +175,8 @@ def main() -> int:
                 "project_commit": training.get("project_commit"),
                 "openpi_source_sha256": training.get("openpi_source_sha256"),
                 "init_params_sha256": training.get("init_params_sha256"),
+                "dataset_digest_algorithm": training.get("dataset_digest_algorithm"),
+                "dataset_sha256": training.get("dataset_sha256"),
             }
         if evaluation_path is not None and evaluation is not None:
             deployed_evaluation = staging / "evaluation.json"

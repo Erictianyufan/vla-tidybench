@@ -10,11 +10,14 @@ import json
 import os
 from pathlib import Path
 
+from vla_tidybench.openpi.deployment import CHECKPOINT_DIGEST_ALGORITHM, checkpoint_fingerprint
 from vla_tidybench.openpi.gpu_preflight import selected_gpu_indices, wait_for_exclusive_gpus
 from vla_tidybench.openpi.training_metrics import (
     JsonlTrainingMetrics,
     build_training_provenance,
+    lerobot_dataset_path,
     source_tree_fingerprint,
+    validate_dataset_fingerprint,
     validate_completed_training_run,
     write_training_completion,
 )
@@ -123,6 +126,14 @@ def main() -> int:
         overwrite=args.overwrite,
         resume=args.resume,
     )
+    dataset_repo = str(getattr(config.data, "repo_id", "fake"))
+    dataset_path = None
+    dataset_files = None
+    dataset_bytes = None
+    dataset_sha256 = None
+    if dataset_repo != "fake":
+        dataset_path = lerobot_dataset_path(dataset_repo)
+        dataset_files, dataset_bytes, dataset_sha256 = checkpoint_fingerprint(dataset_path)
     metrics_path = Path(
         os.environ.get("PI05_TRAIN_METRICS_PATH", Path(str(config.checkpoint_dir)) / "train_metrics.jsonl")
     )
@@ -132,7 +143,12 @@ def main() -> int:
         "experiment": config.exp_name,
         "mode": args.mode,
         "optimizer": args.optimizer or ("adafactor" if args.mode == "full" else "adamw"),
-        "dataset_repo": getattr(config.data, "repo_id", "fake"),
+        "dataset_repo": dataset_repo,
+        "dataset_path": str(dataset_path) if dataset_path else None,
+        "dataset_digest_algorithm": CHECKPOINT_DIGEST_ALGORITHM if dataset_path else None,
+        "dataset_files": dataset_files,
+        "dataset_bytes": dataset_bytes,
+        "dataset_sha256": dataset_sha256,
         "init_params": str(args.init_params.resolve()) if args.init_params else None,
         "num_train_steps": config.num_train_steps,
         "batch_size": config.batch_size,
@@ -161,6 +177,11 @@ def main() -> int:
 
     official.wandb.log = log_locally
     official.main(config)
+    if dataset_path is not None:
+        validate_dataset_fingerprint(
+            dataset_path,
+            (dataset_files, dataset_bytes, dataset_sha256),
+        )
     verified = validate_completed_training_run(
         Path(str(config.checkpoint_dir)),
         num_train_steps=config.num_train_steps,

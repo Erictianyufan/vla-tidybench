@@ -6,6 +6,7 @@ import datetime as dt
 import hashlib
 import json
 import math
+import os
 import subprocess
 import uuid
 from collections.abc import Mapping
@@ -30,6 +31,38 @@ OPENPI_PROVENANCE_PATHS = (
     Path("pyproject.toml"),
     Path("uv.lock"),
 )
+
+
+def lerobot_dataset_path(repo_id: str) -> Path:
+    """Resolve one local LeRobot repository without importing LeRobot."""
+
+    if not repo_id or repo_id == "fake":
+        raise ValueError("a real LeRobot repository ID is required")
+    relative = Path(repo_id)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"invalid LeRobot repository ID: {repo_id!r}")
+    hf_home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
+    root = Path(os.environ.get("HF_LEROBOT_HOME", hf_home / "lerobot")).expanduser().resolve()
+    dataset = (root / relative).resolve()
+    if not dataset.is_relative_to(root):
+        raise ValueError(f"LeRobot dataset escapes its cache root: {dataset}")
+    if not dataset.is_dir():
+        raise FileNotFoundError(f"LeRobot dataset is missing: {dataset}")
+    return dataset
+
+
+def validate_dataset_fingerprint(
+    dataset: Path,
+    expected: tuple[int, int, str],
+) -> None:
+    """Fail if a training dataset changed after its initial fingerprint."""
+
+    observed = checkpoint_fingerprint(dataset)
+    if observed != expected:
+        raise ValueError(
+            "LeRobot dataset content changed during training: "
+            f"expected={expected}, got={observed}"
+        )
 
 
 def git_state(project_root: Path) -> tuple[str, bool]:
@@ -209,6 +242,19 @@ def validate_completed_training_run(
             or init_files < 1
         ):
             raise ValueError("formal training metrics require a valid initialization fingerprint")
+        dataset_path = str(final_metrics.get("dataset_path", ""))
+        dataset_sha256 = str(final_metrics.get("dataset_sha256", ""))
+        dataset_files = int(final_metrics.get("dataset_files", 0))
+        dataset_bytes = int(final_metrics.get("dataset_bytes", 0))
+        if (
+            not dataset_path
+            or final_metrics.get("dataset_digest_algorithm") != CHECKPOINT_DIGEST_ALGORITHM
+            or len(dataset_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in dataset_sha256)
+            or dataset_files < 1
+            or dataset_bytes < 1
+        ):
+            raise ValueError("formal training metrics require a valid dataset content fingerprint")
     nonfinite = [
         key for key in METRIC_KEYS if not math.isfinite(float(final_metrics.get(key, float("nan"))))
     ]
@@ -238,6 +284,11 @@ def validate_completed_training_run(
         "init_params": final_metrics.get("init_params"),
         "init_params_files": final_metrics.get("init_params_files"),
         "init_params_sha256": final_metrics.get("init_params_sha256"),
+        "dataset_path": final_metrics.get("dataset_path"),
+        "dataset_digest_algorithm": final_metrics.get("dataset_digest_algorithm"),
+        "dataset_files": final_metrics.get("dataset_files"),
+        "dataset_bytes": final_metrics.get("dataset_bytes"),
+        "dataset_sha256": final_metrics.get("dataset_sha256"),
         "verified": True,
     }
     validate_training_completion(

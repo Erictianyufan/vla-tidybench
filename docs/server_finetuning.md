@@ -200,8 +200,12 @@ to `train_metrics.jsonl` beside its checkpoints. Every record contains loss,
 gradient norm, parameter norm, the dataset/config identity, a unique process
 session ID, the clean vla-tidybench Git commit, the selected GPUs and optimizer
 overrides, plus content fingerprints of both the OpenPI training sources and the
-initial parameter tree. The source fingerprint preserves provenance even when
-OpenPI was installed from an archive without `.git`. A resumed process may replay
+initial parameter tree. Formal runs also hash every local LeRobot dataset file,
+including its framed relative path and size, and record the dataset tree's file
+count, byte count, local source path, and SHA-256. The source fingerprint
+preserves provenance even when OpenPI was installed from an archive without
+`.git`; the dataset fingerprint prevents a changed local cache from reusing the
+same repository ID unnoticed. A resumed process may replay
 steps after its last durable
 checkpoint; the raw history is retained, while the summary uses the newest
 record for each repeated step. Generate the auditable three-stage summary with:
@@ -235,7 +239,9 @@ resumed process must still emit the final step and completion report.
 Before a newly launched stage process returns success, it verifies the final
 numeric checkpoint, required Orbax metadata, the unique embedded normalization
 asset ID, the dataset identity, the final JSONL metric step, and the full
-checkpoint content hash. It atomically publishes `training_completion.json`
+checkpoint content hash. It also requires the terminal native metric to contain
+the training dataset content fingerprint. It atomically publishes
+`training_completion.json`
 beside the numeric checkpoints. A missing or mismatched artifact makes that
 stage fail instead of allowing the outer runner to advance with an unusable
 checkpoint.

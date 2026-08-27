@@ -5,9 +5,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from vla_tidybench.openpi.deployment import checkpoint_fingerprint
 from vla_tidybench.openpi.training_metrics import (
     JsonlTrainingMetrics,
+    lerobot_dataset_path,
     source_tree_fingerprint,
+    validate_dataset_fingerprint,
     validate_completed_training_run,
     write_training_completion,
 )
@@ -26,6 +29,11 @@ def formal_metadata(dataset_repo: str, steps: int) -> dict[str, object]:
         "init_params": "/checkpoints/base/params",
         "init_params_files": 2,
         "init_params_sha256": "f" * 64,
+        "dataset_path": f"/datasets/{dataset_repo}",
+        "dataset_digest_algorithm": "sha256-tree-v1",
+        "dataset_files": 360,
+        "dataset_bytes": 1_000_000,
+        "dataset_sha256": "a" * 64,
     }
 
 
@@ -117,6 +125,7 @@ def test_completed_training_run_binds_checkpoint_metrics_and_assets(tmp_path: Pa
     assert report["verified"] is True
     assert report["final_step"] == 2
     assert report["checkpoint_asset_id"] == dataset_repo
+    assert report["dataset_sha256"] == "a" * 64
     assert report["loss"] == pytest.approx(1.0)
     assert report["checkpoint_sha256"]
     completion_path = write_training_completion(run_dir, report)
@@ -160,6 +169,24 @@ def test_formal_training_requires_source_provenance(tmp_path: Path) -> None:
         )
 
 
+def test_formal_training_requires_dataset_content_fingerprint(tmp_path: Path) -> None:
+    dataset_repo = "owner/data"
+    run_dir = tmp_path / "stage"
+    write_complete_checkpoint(run_dir / "0", dataset_repo)
+    metrics_path = run_dir / "train_metrics.jsonl"
+    metadata = formal_metadata(dataset_repo, 1)
+    metadata.pop("dataset_sha256")
+    JsonlTrainingMetrics(metrics_path, metadata).log(payload(), step=0)
+
+    with pytest.raises(ValueError, match="dataset content fingerprint"):
+        validate_completed_training_run(
+            run_dir,
+            num_train_steps=1,
+            dataset_repo=dataset_repo,
+            metrics_path=metrics_path,
+        )
+
+
 def test_synthetic_smoke_completion_does_not_require_clean_provenance(tmp_path: Path) -> None:
     run_dir = tmp_path / "smoke"
     write_complete_checkpoint(run_dir / "0", "fake")
@@ -191,3 +218,25 @@ def test_source_tree_fingerprint_is_content_bound(tmp_path: Path) -> None:
     assert count == 2
     assert len(before) == 64
     assert before != after
+
+
+def test_lerobot_dataset_path_uses_huggingface_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dataset = tmp_path / "lerobot" / "owner" / "data"
+    dataset.mkdir(parents=True)
+    monkeypatch.setenv("HF_HOME", str(tmp_path))
+
+    assert lerobot_dataset_path("owner/data") == dataset.resolve()
+    with pytest.raises(ValueError, match="invalid"):
+        lerobot_dataset_path("../escape")
+
+
+def test_dataset_fingerprint_detects_changes(tmp_path: Path) -> None:
+    (tmp_path / "episode.parquet").write_bytes(b"before")
+    expected = checkpoint_fingerprint(tmp_path)
+    validate_dataset_fingerprint(tmp_path, expected)
+
+    (tmp_path / "episode.parquet").write_bytes(b"after")
+    with pytest.raises(ValueError, match="changed during training"):
+        validate_dataset_fingerprint(tmp_path, expected)

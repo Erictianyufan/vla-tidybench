@@ -134,6 +134,11 @@ def main() -> None:
                 if deployment is not None and deployment.training is not None
                 else None
             ),
+            "training_dataset_sha256": (
+                deployment.training.get("dataset_sha256")
+                if deployment is not None and deployment.training is not None
+                else None
+            ),
             "evaluation_gate_passed": bool(deployment and deployment.evaluation),
             "evaluation_success_rate": (
                 deployment.evaluation.get("overall_success_rate")

@@ -65,6 +65,12 @@ def main() -> int:
             raise ValueError("policy service is not backed by a passing formal evaluation")
         if args.require_evaluation and not bool(metadata.get("training_completion_verified", False)):
             raise ValueError("policy service is not backed by a verified training completion")
+        training_dataset_sha256 = str(metadata.get("training_dataset_sha256", ""))
+        if args.require_evaluation and (
+            len(training_dataset_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in training_dataset_sha256)
+        ):
+            raise ValueError("policy service has no verified training dataset SHA-256")
 
         for run in range(1, args.warmup_runs + 1):
             warmup_samples.append(infer_once(client, args.prompt, run))
@@ -103,6 +109,7 @@ def main() -> int:
                 "training_completion_verified": bool(
                     metadata.get("training_completion_verified", False)
                 ),
+                "training_dataset_sha256": training_dataset_sha256 or None,
                 "synthetic_identity_norm": bool(metadata.get("synthetic_identity_norm", False)),
                 "actions_shape": [16, 7],
                 "warmup_samples": warmup_samples,

@@ -63,9 +63,11 @@ treated as cryptographic identity.
 
 Format 3 additionally embeds a checksum-bound `training_completion.json`. It
 binds the final numeric checkpoint to the terminal loss/gradient/parameter norm,
-dataset and normalization asset, clean training-project commit, OpenPI source
-tree fingerprint, initialization-parameter fingerprint, and checkpoint content
-digest. A formal deployment is rejected if this training proof, the autonomous
+dataset repository and full local LeRobot content fingerprint, normalization
+asset, clean training-project commit, OpenPI source tree fingerprint,
+initialization-parameter fingerprint, and checkpoint content digest. The policy
+service advertises the verified training-dataset SHA-256, and the formal
+real-time probe requires it. A formal deployment is rejected if this training proof, the autonomous
 evaluation report, or the copied checkpoint disagrees with either of the other
 two artifacts.
 
