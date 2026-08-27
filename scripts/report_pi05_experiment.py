@@ -34,6 +34,42 @@ def checkpoint_complete(path: Path) -> bool:
     return all((path / relative).is_file() for relative in REQUIRED_CHECKPOINT_FILES)
 
 
+def metric_coverage(path: Path) -> dict[str, object]:
+    if not path.is_file():
+        return {
+            "metrics_available": False,
+            "metrics_records": 0,
+            "metrics_highest_step": None,
+            "recovered_metrics_records": 0,
+            "native_metrics_records": 0,
+        }
+    records = []
+    try:
+        raw = path.read_text(encoding="utf-8")
+        lines = raw.splitlines()
+        if lines and not raw.endswith("\n"):
+            lines = lines[:-1]
+        for number, line in enumerate(lines, start=1):
+            record = json.loads(line)
+            if not isinstance(record, dict) or int(record.get("step", -1)) < 0:
+                raise ValueError(f"invalid metric record at line {number}")
+            records.append(record)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+        return {
+            "metrics_available": True,
+            "metrics_error": str(error),
+        }
+    steps = [int(record["step"]) for record in records]
+    recovered = sum(record.get("recovered_from_console") is True for record in records)
+    return {
+        "metrics_available": True,
+        "metrics_records": len(records),
+        "metrics_highest_step": max(steps) if steps else None,
+        "recovered_metrics_records": recovered,
+        "native_metrics_records": len(records) - recovered,
+    }
+
+
 def stage_status(run_root: Path, name: str, config: str, steps: int) -> dict[str, object]:
     run_dir = run_root / config / name
     numeric = sorted(
@@ -45,6 +81,7 @@ def stage_status(run_root: Path, name: str, config: str, steps: int) -> dict[str
     complete = [path for path in numeric if checkpoint_complete(path)]
     final = run_dir / str(steps - 1)
     metrics = run_dir / "train_metrics.jsonl"
+    completion = run_dir / "training_completion.json"
     return {
         "name": name,
         "config": config,
@@ -52,7 +89,8 @@ def stage_status(run_root: Path, name: str, config: str, steps: int) -> dict[str
         "run_dir": str(run_dir.resolve()),
         "latest_complete_checkpoint": str(complete[-1].resolve()) if complete else None,
         "final_checkpoint_complete": checkpoint_complete(final),
-        "metrics_available": metrics.is_file(),
+        "training_completion_available": completion.is_file(),
+        **metric_coverage(metrics),
     }
 
 
@@ -64,10 +102,16 @@ def parse_latest_progress(log_text: str) -> dict[str, object] | None:
     suffix = match["total"][-1]
     scale = {"k": 1_000, "M": 1_000_000}.get(suffix, 1)
     total_text = match["total"][:-1] if scale != 1 else match["total"]
+    step = int(match["step"])
+    total = int(float(total_text) * scale)
+    seconds_per_step = float(match["rate"])
+    remaining_seconds = max(total - step, 0) * seconds_per_step
     return {
-        "step": int(match["step"]),
-        "total_steps_display": int(float(total_text) * scale),
-        "seconds_per_step": float(match["rate"]),
+        "step": step,
+        "total_steps_display": total,
+        "seconds_per_step": seconds_per_step,
+        "estimated_remaining_seconds": round(remaining_seconds),
+        "estimated_remaining_hours": round(remaining_seconds / 3600, 1),
     }
 
 
@@ -136,13 +180,21 @@ def main() -> int:
     stages = [stage_status(args.run_root.expanduser().resolve(), *stage) for stage in STAGES]
     active = next((stage["name"] for stage in stages if not stage["final_checkpoint_complete"]), None)
     errors = [line.strip() for line in log_text.splitlines() if ERROR_PATTERN.search(line)][-20:]
+    now = dt.datetime.now(dt.UTC)
+    log_mtime = (
+        dt.datetime.fromtimestamp(log_path.stat().st_mtime, dt.UTC)
+        if log_path and log_path.is_file()
+        else None
+    )
     report = {
         "schema_version": 1,
-        "created_at_utc": dt.datetime.now(dt.UTC).isoformat(),
+        "created_at_utc": now.isoformat(),
         "active_stage": active,
         "all_stages_complete": all(stage["final_checkpoint_complete"] for stage in stages),
         "stages": stages,
         "log": str(log_path.resolve()) if log_path else None,
+        "log_mtime_utc": log_mtime.isoformat() if log_mtime else None,
+        "log_age_seconds": round((now - log_mtime).total_seconds(), 1) if log_mtime else None,
         "latest_progress": parse_latest_progress(log_text),
         "error_signals": errors,
         "gpu": gpu_report(tuple(args.gpus), inspect_gpu_usage()),

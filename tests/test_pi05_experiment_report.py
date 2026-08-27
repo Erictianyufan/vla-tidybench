@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -34,6 +35,8 @@ def test_stage_status_reports_only_complete_numeric_checkpoints(tmp_path: Path) 
     assert status["latest_complete_checkpoint"].endswith("499")
     assert status["final_checkpoint_complete"] is False
     assert status["metrics_available"] is True
+    assert status["metrics_records"] == 0
+    assert status["training_completion_available"] is False
 
 
 def test_progress_parser_uses_latest_tqdm_record() -> None:
@@ -44,7 +47,45 @@ def test_progress_parser_uses_latest_tqdm_record() -> None:
 
     progress = reporter.parse_latest_progress(text)
 
-    assert progress == {"step": 161, "total_steps_display": 5_000, "seconds_per_step": 128.9}
+    assert progress == {
+        "step": 161,
+        "total_steps_display": 5_000,
+        "seconds_per_step": 128.9,
+        "estimated_remaining_seconds": 623_747,
+        "estimated_remaining_hours": 173.3,
+    }
+
+
+def test_metric_coverage_discloses_recovered_and_native_records(tmp_path: Path) -> None:
+    path = tmp_path / "train_metrics.jsonl"
+    path.write_text(
+        "\n".join(
+            json.dumps(record)
+            for record in (
+                {"step": 0, "recovered_from_console": True},
+                {"step": 1, "recovered_from_console": True},
+                {"step": 499, "recovered_from_console": False},
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    coverage = reporter.metric_coverage(path)
+
+    assert coverage["metrics_highest_step"] == 499
+    assert coverage["recovered_metrics_records"] == 2
+    assert coverage["native_metrics_records"] == 1
+
+
+def test_metric_coverage_ignores_one_inflight_partial_line(tmp_path: Path) -> None:
+    path = tmp_path / "train_metrics.jsonl"
+    path.write_text('{"step": 2}\n{"step":', encoding="utf-8")
+
+    coverage = reporter.metric_coverage(path)
+
+    assert "metrics_error" not in coverage
+    assert coverage["metrics_records"] == 1
 
 
 def test_gpu_report_separates_training_and_foreign_pids(monkeypatch) -> None:
