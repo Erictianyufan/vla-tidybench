@@ -120,7 +120,31 @@ def main() -> None:
             "project_commit": project_commit,
             "project_dirty": project_dirty,
             "deployment": str(deployment.root) if deployment is not None else None,
+            "deployment_format_version": (
+                deployment.manifest.get("format_version") if deployment is not None else None
+            ),
+            "training_completion_verified": bool(deployment and deployment.training),
+            "training_project_commit": (
+                deployment.training.get("project_commit")
+                if deployment is not None and deployment.training is not None
+                else None
+            ),
+            "openpi_source_sha256": (
+                deployment.training.get("openpi_source_sha256")
+                if deployment is not None and deployment.training is not None
+                else None
+            ),
             "evaluation_gate_passed": bool(deployment and deployment.evaluation),
+            "evaluation_success_rate": (
+                deployment.evaluation.get("overall_success_rate")
+                if deployment is not None and deployment.evaluation is not None
+                else None
+            ),
+            "evaluation_p95_infer_ms": (
+                deployment.evaluation.get("p95_infer_ms")
+                if deployment is not None and deployment.evaluation is not None
+                else None
+            ),
             "synthetic_identity_norm": args.synthetic_identity_norm,
         }
     )

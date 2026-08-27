@@ -379,9 +379,16 @@ From a second shell, verify the real WebSocket serialization, handshake,
 checkpoint identity, `(16, 7)` response and warm inference latency:
 
 ```bash
-POLICY_PROBE_FLAG="--expect-deployment $DEPLOYMENT --require-evaluation --max-last-infer-ms 250" \
+POLICY_PROBE_FLAG="--expect-deployment $DEPLOYMENT --require-evaluation \
+  --max-p95-infer-ms 250 --max-p95-round-trip-ms 300" \
   make pi05-policy-probe
 ```
+
+The probe performs one JIT warm-up request by default, then checks five measured
+requests. It validates the `(16, 7)` finite action contract, checkpoint identity,
+formal evaluation gate, embedded training-completion proof, policy-side P95, and
+end-to-end WebSocket P95. `PROBE_WARMUP_RUNS` and `PROBE_RUNS` control sample
+counts without weakening the recorded formal evaluation gate.
 
 The verifier resolves the checkpoint link, checks required Orbax metadata,
 file count, byte count, the complete checkpoint tree SHA-256, clean-code

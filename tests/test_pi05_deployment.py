@@ -379,6 +379,7 @@ def test_policy_probe_checks_action_shape_and_checkpoint_metadata() -> None:
     assert 'metadata.get("checkpoint")' in source
     assert 'metadata.get("checkpoint_sha256", "")' in source
     assert 'metadata.get("evaluation_gate_passed"' in source
+    assert 'metadata.get("training_completion_verified"' in source
 
 
 def test_policy_server_binds_config_to_checkpoint_dataset_assets() -> None:
@@ -387,6 +388,7 @@ def test_policy_server_binds_config_to_checkpoint_dataset_assets() -> None:
     assert "args.dataset_repo or checkpoint_asset_id(checkpoint)" in source
     assert "make_config(finetune_mode=mode, dataset_repo=dataset_repo)" in source
     assert '"project_commit": project_commit' in source
+    assert '"training_completion_verified": bool(deployment and deployment.training)' in source
     assert "validated deployment must be served by its exact clean project commit" in source
 
 

@@ -204,7 +204,8 @@ pi05-deployment-serve: pi05-verify-deployment
 pi05-policy-probe:
 	./scripts/run_openpi.sh scripts/probe_drawer_policy.py \
 		--host $${POLICY_HOST:-127.0.0.1} --port $${POLICY_PORT:-8000} \
-		--runs $${PROBE_RUNS:-2} --expect-mode $${POLICY_MODE:-full} \
+		--warmup-runs $${PROBE_WARMUP_RUNS:-1} --runs $${PROBE_RUNS:-5} \
+		--expect-mode $${POLICY_MODE:-full} \
 		$${POLICY_PROBE_FLAG:-}
 
 pi05-eval-suite:
