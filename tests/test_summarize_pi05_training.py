@@ -38,6 +38,9 @@ def test_summary_uses_latest_record_for_replayed_resume_steps(tmp_path: Path) ->
     assert report["first_step"] == 0
     assert report["last_step"] == 2
     assert report["final_step_present"] is True
+    assert report["recovered_steps"] == 0
+    assert report["native_steps"] == 3
+    assert report["completion_report_available"] is False
     assert report["loss_last"] == 1.0
     assert report["loss_min"] == 1.0
     assert report["grad_norm_max"] == 4.0
@@ -50,3 +53,18 @@ def test_missing_metrics_are_reported_without_claiming_completion(tmp_path: Path
     assert report["available"] is False
     assert report["expected_steps"] == 5_000
     assert report["final_step_present"] is False
+
+
+def test_recovered_console_steps_are_disclosed(tmp_path: Path) -> None:
+    path = tmp_path / "train_metrics.jsonl"
+    logger = JsonlTrainingMetrics(
+        path,
+        {"experiment": "stage1-lora", "recovered_from_console": True},
+    )
+    logger.log(metrics(1.5), step=0)
+
+    report = summary.summarize_stage("stage1-lora", path, expected_steps=5_000)
+
+    assert report["recovered_steps"] == 1
+    assert report["native_steps"] == 0
+    assert report["final_step_recovered"] is False

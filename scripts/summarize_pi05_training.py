@@ -43,6 +43,7 @@ def read_records(path: Path) -> list[dict[str, object]]:
 
 
 def summarize_stage(name: str, path: Path, expected_steps: int) -> dict[str, object]:
+    completion_path = path.parent / "training_completion.json"
     if not path.is_file():
         return {
             "name": name,
@@ -50,6 +51,8 @@ def summarize_stage(name: str, path: Path, expected_steps: int) -> dict[str, obj
             "available": False,
             "expected_steps": expected_steps,
             "final_step_present": False,
+            "completion_report": str(completion_path.resolve()),
+            "completion_report_available": completion_path.is_file(),
         }
     records = read_records(path)
     latest_by_step = {int(record["step"]): record for record in records}
@@ -57,6 +60,9 @@ def summarize_stage(name: str, path: Path, expected_steps: int) -> dict[str, obj
     losses = [float(record["loss"]) for record in effective]
     grad_norms = [float(record["grad_norm"]) for record in effective]
     param_norms = [float(record["param_norm"]) for record in effective]
+    recovered = [record for record in effective if record.get("recovered_from_console") is True]
+    native = [record for record in effective if record.get("recovered_from_console") is not True]
+    final_step_present = bool(effective and int(effective[-1]["step"]) == expected_steps - 1)
     return {
         "name": name,
         "metrics_path": str(path.resolve()),
@@ -65,9 +71,16 @@ def summarize_stage(name: str, path: Path, expected_steps: int) -> dict[str, obj
         "raw_records": len(records),
         "unique_steps": len(effective),
         "sessions": len({str(record["session_id"]) for record in records}),
+        "recovered_steps": len(recovered),
+        "native_steps": len(native),
         "first_step": int(effective[0]["step"]) if effective else None,
         "last_step": int(effective[-1]["step"]) if effective else None,
-        "final_step_present": bool(effective and int(effective[-1]["step"]) == expected_steps - 1),
+        "final_step_present": final_step_present,
+        "final_step_recovered": bool(
+            final_step_present and effective[-1].get("recovered_from_console") is True
+        ),
+        "completion_report": str(completion_path.resolve()),
+        "completion_report_available": completion_path.is_file(),
         "loss_first": losses[0] if losses else None,
         "loss_last": losses[-1] if losses else None,
         "loss_min": min(losses) if losses else None,
@@ -95,6 +108,9 @@ def main() -> int:
         "created_at_utc": dt.datetime.now(dt.UTC).isoformat(),
         "run_root": str(run_root),
         "all_final_steps_present": all(stage["final_step_present"] for stage in stages),
+        "all_completion_reports_present": all(
+            stage["completion_report_available"] for stage in stages
+        ),
         "stages": stages,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
