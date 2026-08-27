@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -262,6 +263,7 @@ def main() -> int:
         help="exact rollout to include; repeat to exclude stale files below input-root",
     )
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--context-lock", type=Path)
     parser.add_argument("--skills", nargs="+", choices=SKILLS, default=list(SKILLS))
     parser.add_argument("--min-episodes-per-skill", type=int, default=3)
     parser.add_argument("--min-success-rate", type=float)
@@ -291,6 +293,19 @@ def main() -> int:
     missing = [str(path) for path in paths if not path.is_file()]
     if missing:
         parser.error("evaluation episodes are missing: " + ", ".join(missing))
+    context_lock = None
+    context_lock_sha256 = None
+    if args.context_lock:
+        lock_path = args.context_lock.expanduser().resolve()
+        try:
+            lock_bytes = lock_path.read_bytes()
+            context_lock = json.loads(lock_bytes)
+        except (OSError, json.JSONDecodeError) as error:
+            parser.error(f"cannot read context lock {lock_path}: {error}")
+        if not isinstance(context_lock, dict):
+            parser.error("context lock must be a JSON object")
+        canonical_lock = (json.dumps(context_lock, indent=2) + "\n").encode()
+        context_lock_sha256 = hashlib.sha256(canonical_lock).hexdigest()
     try:
         episodes = [read_episode(path, allow_assisted=args.allow_assisted) for path in paths]
         report = summarize(
@@ -301,6 +316,8 @@ def main() -> int:
             max_p95_infer_ms=args.max_p95_infer_ms,
             input_root=args.input_root,
         )
+        report["context_lock"] = context_lock
+        report["context_lock_sha256"] = context_lock_sha256
     except ValueError as error:
         parser.error(str(error))
     args.output.parent.mkdir(parents=True, exist_ok=True)

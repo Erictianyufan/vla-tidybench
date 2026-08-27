@@ -171,6 +171,66 @@ def validate_formal_evaluation(
     if episode_count != len(episodes):
         raise ValueError("formal evaluation episode_count disagrees with episode evidence")
 
+    context_lock = evaluation.get("context_lock")
+    if not isinstance(context_lock, dict) or int(context_lock.get("schema_version", -1)) != 1:
+        raise ValueError("formal evaluation has no valid context lock")
+    encoded_lock = (json.dumps(context_lock, indent=2) + "\n").encode()
+    if hashlib.sha256(encoded_lock).hexdigest() != evaluation.get("context_lock_sha256"):
+        raise ValueError("formal evaluation context-lock SHA-256 is invalid")
+    manifest_digest = str(context_lock.get("context_manifest_sha256", ""))
+    if context_lock.get("context_manifest") != "main_validation.json" or len(manifest_digest) != 64 or any(
+        char not in "0123456789abcdef" for char in manifest_digest
+    ):
+        raise ValueError("formal evaluation context lock has invalid manifest identity")
+    context_sources = context_lock.get("sources")
+    if not isinstance(context_sources, list):
+        raise ValueError("formal evaluation context lock has no sources")
+    expected_context_files = {f"drawer_{skill}_formal.hdf5" for skill in FORMAL_SKILLS}
+    locked_contexts: dict[str, set[str]] = {}
+    locked_bytes = 0
+    locked_count = 0
+    for source in context_sources:
+        if not isinstance(source, dict):
+            raise ValueError("formal evaluation context-lock sources must be objects")
+        file = str(source.get("file", ""))
+        digest = str(source.get("sha256", ""))
+        if file in locked_contexts or len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+            raise ValueError("formal evaluation context lock has invalid source identity")
+        names = source.get("episode_names")
+        indices = source.get("episode_indices")
+        source_bytes = int(source.get("bytes", -1))
+        if (
+            not isinstance(names, list)
+            or not isinstance(indices, list)
+            or len(names) != len(indices)
+            or len(set(names)) != len(names)
+            or any(not isinstance(name, str) or not name for name in names)
+            or len(set(indices)) != len(indices)
+            or any(not isinstance(index, int) or index < 0 for index in indices)
+            or source_bytes <= 0
+        ):
+            raise ValueError(f"formal evaluation context lock has invalid episodes for {file}")
+        locked_contexts[file] = set(names)
+        locked_count += len(names)
+        locked_bytes += source_bytes
+    if set(locked_contexts) != expected_context_files:
+        raise ValueError("formal evaluation context lock does not contain the four skill sources")
+    if int(context_lock.get("context_count", -1)) != locked_count:
+        raise ValueError("formal evaluation context-lock episode count is inconsistent")
+    if int(context_lock.get("total_bytes", -1)) != locked_bytes or locked_bytes <= 0:
+        raise ValueError("formal evaluation context-lock byte count is inconsistent")
+    for episode in episodes:
+        if not isinstance(episode, dict):
+            raise ValueError("formal evaluation episode evidence must contain objects")
+        try:
+            context_file, context_episode = str(episode.get("context", "")).split("::", maxsplit=1)
+        except ValueError as error:
+            raise ValueError("formal evaluation episode has malformed context identity") from error
+        if context_episode not in locked_contexts.get(context_file, set()):
+            raise ValueError(
+                f"formal evaluation episode context is not content-locked: {context_file}::{context_episode}"
+            )
+
     audited_successes = 0
     for skill in FORMAL_SKILLS:
         selected = [episode for episode in episodes if isinstance(episode, dict) and episode.get("skill") == skill]

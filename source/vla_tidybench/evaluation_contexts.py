@@ -6,6 +6,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import h5py
+
 
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
@@ -39,12 +41,22 @@ def build_context_lock(manifest_path: Path, data_root: Path) -> dict[str, object
         indices = [int(index) for index in source.get("episode_indices", [])]
         if not indices or len(set(indices)) != len(indices) or any(index < 0 for index in indices):
             raise ValueError(f"invalid validation episode indices for {relative}")
+        with h5py.File(path, "r") as dataset:
+            if int(dataset.attrs.get("format_version", -1)) != 1 or "data" not in dataset:
+                raise ValueError(f"unsupported validation context HDF5: {path}")
+            try:
+                names = sorted(dataset["data"].keys(), key=lambda name: int(name.removeprefix("demo_")))
+            except ValueError as error:
+                raise ValueError(f"context episodes must use demo_<integer> names: {path}") from error
+        if any(index >= len(names) for index in indices):
+            raise ValueError(f"validation episode index is out of range for {relative}")
         records.append(
             {
                 "file": relative,
                 "bytes": path.stat().st_size,
                 "sha256": sha256_file(path),
                 "episode_indices": indices,
+                "episode_names": [names[index] for index in indices],
             }
         )
     return {

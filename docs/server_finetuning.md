@@ -293,10 +293,12 @@ set:
 make pi05-lock-eval-contexts
 ```
 
-The lock records the validation-manifest hash plus the byte count, SHA-256 and
-episode indices for every source HDF5. Formal evaluation recomputes all hashes
-before launching Isaac; the integrity check can be skipped only together with
-`--dry-run`.
+The lock records the validation-manifest hash plus the byte count, SHA-256,
+episode indices, and resolved `demo_*` names for every source HDF5. Formal
+evaluation recomputes all hashes before launching Isaac; the integrity check can
+be skipped only together with `--dry-run`. The summarizer embeds that exact lock
+and its canonical SHA-256 in `evaluation.json`. Deployment verification then
+rejects any rollout whose `file::demo_*` context is absent from the locked set.
 
 Formal rollouts use success predicate
 `drawer_skill_v2_relative_stable`. OPEN and CLOSE must reach their drawer

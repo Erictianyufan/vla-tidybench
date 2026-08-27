@@ -38,6 +38,24 @@ def write_checkpoint(path: Path) -> None:
 
 def formal_evaluation(checkpoint: Path, checkpoint_sha256: str) -> dict[str, object]:
     skills = ("open", "pick", "place", "close")
+    context_sources = [
+        {
+            "file": f"drawer_{skill}_formal.hdf5",
+            "bytes": 100,
+            "sha256": "c" * 64,
+            "episode_indices": list(range(5)),
+            "episode_names": [f"demo_{seed}" for seed in range(5)],
+        }
+        for skill in skills
+    ]
+    context_lock = {
+        "schema_version": 1,
+        "context_manifest": "main_validation.json",
+        "context_manifest_sha256": "f" * 64,
+        "context_count": 20,
+        "total_bytes": 400,
+        "sources": context_sources,
+    }
     episodes = [
         {
             "skill": skill,
@@ -60,6 +78,10 @@ def formal_evaluation(checkpoint: Path, checkpoint_sha256: str) -> dict[str, obj
         "checkpoint": str(checkpoint.resolve()),
         "checkpoint_sha256": checkpoint_sha256,
         "project_commit": PROJECT_COMMIT,
+        "context_lock": context_lock,
+        "context_lock_sha256": hashlib.sha256(
+            (json.dumps(context_lock, indent=2) + "\n").encode()
+        ).hexdigest(),
         "required_skills": list(skills),
         "episode_count": len(episodes),
         "successes": len(episodes),
@@ -317,4 +339,19 @@ def test_evaluation_from_another_project_commit_is_rejected(tmp_path: Path) -> N
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     with pytest.raises(ValueError, match="does not match deployment code"):
+        load_deployment(deployment)
+
+
+def test_evaluation_context_outside_locked_set_is_rejected(tmp_path: Path) -> None:
+    deployment = make_deployment(tmp_path)
+    evaluation_path = deployment / "evaluation.json"
+    evaluation = json.loads(evaluation_path.read_text(encoding="utf-8"))
+    evaluation["episodes"][0]["context"] = "drawer_open_formal.hdf5::demo_99"
+    evaluation_path.write_text(json.dumps(evaluation), encoding="utf-8")
+    manifest_path = deployment / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["evaluation"]["sha256"] = hashlib.sha256(evaluation_path.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="not content-locked"):
         load_deployment(deployment)

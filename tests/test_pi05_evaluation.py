@@ -315,6 +315,7 @@ def test_eval_suite_summarizes_only_outputs_from_the_current_matrix(
     assert len(explicit) == len(evaluation_suite.SKILLS) * 2
     assert len(set(explicit)) == len(explicit)
     assert all(Path(path).name in ("seed_300.hdf5", "seed_301.hdf5") for path in explicit)
+    assert summary[summary.index("--context-lock") + 1] == str(manifest.with_suffix(".lock.json"))
 
 
 def test_summary_cli_rejects_duplicate_explicit_episode_paths(

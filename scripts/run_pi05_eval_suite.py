@@ -192,6 +192,8 @@ def main() -> int:
         str(args.min_success_rate),
         "--max-p95-infer-ms",
         str(args.max_p95_infer_ms),
+        "--context-lock",
+        str(context_lock),
     ]
     for output in expected_outputs:
         summary_command.extend(("--episode", str(output)))
