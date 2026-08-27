@@ -13,6 +13,7 @@ from vla_tidybench.task_metrics import FORMAL_SUCCESS_HOLD_STEPS, SUCCESS_PREDIC
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKPOINT_SHA256 = "a" * 64
+PROJECT_COMMIT = "b" * 40
 SPEC = importlib.util.spec_from_file_location("summarize_pi05_eval", ROOT / "scripts/summarize_pi05_eval.py")
 assert SPEC is not None and SPEC.loader is not None
 evaluation = importlib.util.module_from_spec(SPEC)
@@ -62,6 +63,10 @@ def write_rollout(
         output.attrs["policy"] = policy
         output.attrs["policy_checkpoint"] = checkpoint
         output.attrs["policy_checkpoint_sha256"] = CHECKPOINT_SHA256
+        output.attrs["policy_project_commit"] = PROJECT_COMMIT
+        output.attrs["policy_project_dirty"] = False
+        output.attrs["rollout_project_commit"] = PROJECT_COMMIT
+        output.attrs["rollout_project_dirty"] = False
         output.attrs["policy_residual_weight"] = residual_weight
         output.attrs["initial_state_file"] = f"/data/drawer_{skill}_formal.hdf5"
         output.attrs["initial_state_episode"] = f"demo_{seed}"
@@ -100,6 +105,7 @@ def test_four_skill_autonomous_gate_passes(tmp_path: Path) -> None:
     assert report["episode_count"] == 12
     assert report["overall_success_rate"] == pytest.approx(2 / 3)
     assert report["checkpoint_sha256"] == CHECKPOINT_SHA256
+    assert report["project_commit"] == PROJECT_COMMIT
     assert report["p95_infer_ms"] <= 110.0
 
 
@@ -175,6 +181,16 @@ def test_mixed_checkpoint_digests_fail_the_gate(tmp_path: Path) -> None:
     )
     assert report["gate_passed"] is False
     assert any("expected one checkpoint SHA-256" in violation for violation in report["violations"])
+
+
+def test_mismatched_policy_and_rollout_commits_are_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "open.hdf5"
+    write_rollout(path, skill="open", seed=1, success=True)
+    with h5py.File(path, "r+") as output:
+        output.attrs["rollout_project_commit"] = "c" * 40
+
+    with pytest.raises(ValueError, match="commits differ"):
+        evaluation.read_episode(path, allow_assisted=False)
 
 
 def test_duplicate_contexts_fail_the_gate(tmp_path: Path) -> None:
@@ -330,6 +346,8 @@ def test_closed_loop_records_selected_skill_and_checkpoint() -> None:
     assert 'output.attrs["skill"] = skill' in source
     assert 'output.attrs["policy_checkpoint"]' in source
     assert 'output.attrs["policy_checkpoint_sha256"]' in source
+    assert 'output.attrs["policy_project_commit"]' in source
+    assert 'output.attrs["rollout_project_commit"]' in source
     assert 'parser.add_argument("--initial-state-file"' in source
     assert 'parser.add_argument("--initial-state-episode")' in source
     assert "env.reset_to(context.get_initial_state()" in source

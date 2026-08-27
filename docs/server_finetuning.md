@@ -253,7 +253,9 @@ seeds and five distinct held-out initial-state contexts per skill, at least
 rollouts, and overall P95 policy latency at most `250 ms`. The suite passes the
 exact 20 paths from its current skill/seed matrix to the summarizer; unrelated
 or stale HDF5 files below the evaluation directory are never counted toward the
-gate.
+gate. Every autonomous rollout also records the policy server and Isaac client
+Git commits and dirty-worktree flags. Formal evaluation requires both ends to
+use the same clean commit, and export requires that exact commit as well.
 `main_validation.json` selects the contexts from the raw nominal HDF5 files.
 Only each held-out episode's initial simulator state is restored: validation
 actions are never replayed and are never supplied to the policy. The raw files

@@ -98,6 +98,11 @@ def main() -> int:
     if missing:
         raise FileNotFoundError("checkpoint is incomplete; missing: " + ", ".join(missing))
 
+    project_root = Path(__file__).resolve().parents[1]
+    project_commit = git_value(project_root, "rev-parse", "HEAD")
+    project_status = git_value(project_root, "status", "--porcelain")
+    project_dirty = project_status is None or bool(project_status)
+
     evaluation: dict[str, object] | None = None
     evaluation_path: Path | None = None
     file_count, byte_count, checkpoint_sha256 = checkpoint_fingerprint(checkpoint)
@@ -108,12 +113,9 @@ def main() -> int:
             evaluation,
             checkpoint=checkpoint,
             checkpoint_sha256=checkpoint_sha256,
+            project_commit=project_commit,
         )
 
-    project_root = Path(__file__).resolve().parents[1]
-    project_commit = git_value(project_root, "rev-parse", "HEAD")
-    project_status = git_value(project_root, "status", "--porcelain")
-    project_dirty = project_status is None or bool(project_status)
     if evaluation is not None:
         valid_commit = project_commit is not None and len(project_commit) in (40, 64) and all(
             char in "0123456789abcdef" for char in project_commit

@@ -17,6 +17,7 @@ from vla_tidybench.openpi.deployment import (
 from vla_tidybench.task_metrics import FORMAL_SUCCESS_HOLD_STEPS, SUCCESS_PREDICATE_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
+PROJECT_COMMIT = "d" * 40
 EXPORT_SPEC = importlib.util.spec_from_file_location(
     "export_pi05_checkpoint", ROOT / "scripts" / "export_pi05_checkpoint.py"
 )
@@ -43,6 +44,7 @@ def formal_evaluation(checkpoint: Path, checkpoint_sha256: str) -> dict[str, obj
             "seed": seed,
             "context": f"drawer_{skill}_formal.hdf5::demo_{seed}",
             "checkpoint_sha256": checkpoint_sha256,
+            "project_commit": PROJECT_COMMIT,
             "success_predicate": SUCCESS_PREDICATE_VERSION,
             "success_hold_steps": FORMAL_SUCCESS_HOLD_STEPS,
             "success": True,
@@ -57,6 +59,7 @@ def formal_evaluation(checkpoint: Path, checkpoint_sha256: str) -> dict[str, obj
         "policy": "pi0.5-drawer-full",
         "checkpoint": str(checkpoint.resolve()),
         "checkpoint_sha256": checkpoint_sha256,
+        "project_commit": PROJECT_COMMIT,
         "required_skills": list(skills),
         "episode_count": len(episodes),
         "successes": len(episodes),
@@ -105,7 +108,7 @@ def make_deployment(tmp_path: Path, *, validated: bool = True) -> Path:
             "sha256": checkpoint_sha256,
         },
         "project_dirty": False,
-        "project_commit": "d" * 40,
+        "project_commit": PROJECT_COMMIT,
         "evaluation": evaluation_manifest,
     }
     (deployment / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
@@ -199,7 +202,7 @@ def test_export_binds_evaluated_checkpoint_content(tmp_path: Path, monkeypatch: 
     evaluation_path.write_text(json.dumps(formal_evaluation(checkpoint, checkpoint_sha256)), encoding="utf-8")
 
     def clean_git(_root: Path, *arguments: str) -> str:
-        return "d" * 40 if arguments == ("rev-parse", "HEAD") else ""
+        return PROJECT_COMMIT if arguments == ("rev-parse", "HEAD") else ""
 
     monkeypatch.setattr(exporter, "git_value", clean_git)
     monkeypatch.setattr(
@@ -296,3 +299,22 @@ def test_policy_server_binds_config_to_checkpoint_dataset_assets() -> None:
     assert 'dataset_repo = str(deployment.manifest["dataset_repo"])' in source
     assert "args.dataset_repo or checkpoint_asset_id(checkpoint)" in source
     assert "make_config(finetune_mode=mode, dataset_repo=dataset_repo)" in source
+    assert '"project_commit": project_commit' in source
+    assert "validated deployment must be served by its exact clean project commit" in source
+
+
+def test_evaluation_from_another_project_commit_is_rejected(tmp_path: Path) -> None:
+    deployment = make_deployment(tmp_path)
+    evaluation_path = deployment / "evaluation.json"
+    evaluation = json.loads(evaluation_path.read_text(encoding="utf-8"))
+    evaluation["project_commit"] = "e" * 40
+    for episode in evaluation["episodes"]:
+        episode["project_commit"] = "e" * 40
+    evaluation_path.write_text(json.dumps(evaluation), encoding="utf-8")
+    manifest_path = deployment / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["evaluation"]["sha256"] = hashlib.sha256(evaluation_path.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="does not match deployment code"):
+        load_deployment(deployment)

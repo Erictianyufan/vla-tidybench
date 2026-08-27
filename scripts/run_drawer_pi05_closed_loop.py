@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import time
 from pathlib import Path
 
@@ -100,7 +101,28 @@ def _obs(env):
     return table, wrist, np.concatenate((q, qd), dtype=np.float32)
 
 
+def _git_state(project_root: Path) -> tuple[str, bool]:
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=project_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=project_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    revision = commit.stdout.strip() if commit.returncode == 0 else ""
+    dirty = status.returncode != 0 or bool(status.stdout.strip())
+    return revision, dirty
+
+
 def main() -> int:
+    rollout_project_commit, rollout_project_dirty = _git_state(Path(__file__).resolve().parents[1])
     cfg = TidyBenchDrawerShowcaseEnvCfg() if args_cli.showcase else TidyBenchDrawerEnvCfg()
     cfg.sim.device = args_cli.device
     cfg.scene.num_envs = 1
@@ -277,6 +299,10 @@ def main() -> int:
             output.attrs["policy"] = policy_name
             output.attrs["policy_checkpoint"] = str(policy_metadata.get("checkpoint", ""))
             output.attrs["policy_checkpoint_sha256"] = str(policy_metadata.get("checkpoint_sha256", ""))
+            output.attrs["policy_project_commit"] = str(policy_metadata.get("project_commit", ""))
+            output.attrs["policy_project_dirty"] = bool(policy_metadata.get("project_dirty", True))
+            output.attrs["rollout_project_commit"] = rollout_project_commit
+            output.attrs["rollout_project_dirty"] = rollout_project_dirty
             output.attrs["prompt"] = args_cli.prompt
             output.attrs["skill"] = skill
             output.attrs["seed"] = args_cli.seed

@@ -118,7 +118,11 @@ def _number(value: object, label: str) -> float:
 
 
 def validate_formal_evaluation(
-    evaluation: dict[str, Any], *, checkpoint: Path, checkpoint_sha256: str
+    evaluation: dict[str, Any],
+    *,
+    checkpoint: Path,
+    checkpoint_sha256: str,
+    project_commit: str | None = None,
 ) -> None:
     """Validate a self-consistent, locked four-skill evaluation report."""
 
@@ -137,6 +141,14 @@ def validate_formal_evaluation(
         )
     if evaluation.get("checkpoint_sha256") != checkpoint_sha256:
         raise ValueError("evaluation checkpoint SHA-256 does not match deployment checkpoint")
+    evaluated_commit = str(evaluation.get("project_commit", ""))
+    valid_commit = len(evaluated_commit) in (40, 64) and all(
+        char in "0123456789abcdef" for char in evaluated_commit
+    )
+    if not valid_commit:
+        raise ValueError("formal evaluation has no valid project commit")
+    if project_commit is not None and evaluated_commit != project_commit:
+        raise ValueError("formal evaluation project commit does not match deployment code")
 
     required_skills = evaluation.get("required_skills")
     if not isinstance(required_skills, list) or tuple(required_skills) != FORMAL_SKILLS:
@@ -175,6 +187,8 @@ def validate_formal_evaluation(
             raise ValueError(f"formal evaluation skill {skill} has invalid or duplicate contexts")
         if any(episode.get("checkpoint_sha256") != checkpoint_sha256 for episode in selected):
             raise ValueError(f"formal evaluation skill {skill} mixes checkpoint content")
+        if any(episode.get("project_commit") != evaluated_commit for episode in selected):
+            raise ValueError(f"formal evaluation skill {skill} mixes project commits")
         if any(episode.get("success_predicate") != SUCCESS_PREDICATE_VERSION for episode in selected):
             raise ValueError(f"formal evaluation skill {skill} mixes success predicates")
         invalid_hold = any(
@@ -316,6 +330,7 @@ def load_deployment(path: Path, *, require_validated: bool = True) -> Deployment
                 evaluation,
                 checkpoint=recorded_checkpoint,
                 checkpoint_sha256=checkpoint_sha256,
+                project_commit=str(manifest.get("project_commit", "")),
             )
 
     return Deployment(root, checkpoint, checkpoint_sha256, policy_mode, manifest, evaluation)

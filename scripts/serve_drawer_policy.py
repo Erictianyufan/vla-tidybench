@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +26,26 @@ def identity_norm_stats() -> dict[str, normalize.NormStats]:
     ones = np.ones(32, dtype=np.float32)
     stats = normalize.NormStats(mean=zeros, std=ones, q01=-ones, q99=ones)
     return {"state": stats, "actions": stats}
+
+
+def git_state(project_root: Path) -> tuple[str, bool]:
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=project_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=project_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    revision = commit.stdout.strip() if commit.returncode == 0 else ""
+    dirty = status.returncode != 0 or bool(status.stdout.strip())
+    return revision, dirty
 
 
 def main() -> None:
@@ -55,6 +76,8 @@ def main() -> None:
     if args.synthetic_identity_norm and not args.allow_unvalidated_deployment:
         parser.error("--synthetic-identity-norm requires --allow-unvalidated-deployment")
 
+    project_root = Path(__file__).resolve().parents[1]
+    project_commit, project_dirty = git_state(project_root)
     deployment = None
     if args.deployment is not None:
         deployment = load_deployment(args.deployment, require_validated=not args.allow_unvalidated_deployment)
@@ -67,6 +90,10 @@ def main() -> None:
         mode = deployment.policy_mode
         four_skill = True
         dataset_repo = str(deployment.manifest["dataset_repo"])
+        if not args.allow_unvalidated_deployment and (
+            project_dirty or project_commit != deployment.manifest.get("project_commit")
+        ):
+            parser.error("validated deployment must be served by its exact clean project commit")
     else:
         assert args.checkpoint is not None
         checkpoint = args.checkpoint.expanduser().resolve()
@@ -90,6 +117,8 @@ def main() -> None:
             "checkpoint": str(checkpoint),
             "checkpoint_sha256": checkpoint_sha256,
             "dataset_repo": dataset_repo,
+            "project_commit": project_commit,
+            "project_dirty": project_dirty,
             "deployment": str(deployment.root) if deployment is not None else None,
             "evaluation_gate_passed": bool(deployment and deployment.evaluation),
             "synthetic_identity_norm": args.synthetic_identity_norm,

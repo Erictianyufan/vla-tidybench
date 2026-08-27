@@ -69,6 +69,13 @@ configuration before OpenPI restores normalization statistics. This prevents a
 valid weight tree from being served with statistics from a default or stale
 dataset.
 
+Formal rollouts bind both halves of the distributed system to source control:
+the policy service advertises its runtime Git commit and clean-state flag, and
+the Isaac client records its own. The evaluation gate requires the two commits
+to be identical and clean. The exporter and deployment verifier then require
+the report commit to match the clean checkout used to package and serve the
+weights.
+
 ## Known vendor-image constraints
 
 - `isaaclab.sh` fails if `/home/ubuntu/env_isaaclab` is not activated first.

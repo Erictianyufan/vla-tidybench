@@ -30,6 +30,8 @@ class Episode:
     policy: str
     checkpoint: str
     checkpoint_sha256: str
+    project_commit: str
+    rollout_project_commit: str
     residual_weight: float
     context: str
     success_predicate: str
@@ -57,6 +59,8 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
         policy = _text(source.attrs.get("policy", ""))
         checkpoint = _text(source.attrs.get("policy_checkpoint", ""))
         checkpoint_sha256 = _text(source.attrs.get("policy_checkpoint_sha256", ""))
+        project_commit = _text(source.attrs.get("policy_project_commit", ""))
+        rollout_project_commit = _text(source.attrs.get("rollout_project_commit", ""))
         residual_weight = float(source.attrs.get("policy_residual_weight", 0.0))
         context_file = _text(source.attrs.get("initial_state_file", ""))
         context_episode = _text(source.attrs.get("initial_state_episode", ""))
@@ -74,6 +78,19 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
         )
         if not assisted and invalid_digest:
             raise ValueError(f"autonomous rollout has no valid checkpoint SHA-256: {path}")
+        invalid_commits = any(
+            len(commit) not in (40, 64) or any(char not in "0123456789abcdef" for char in commit)
+            for commit in (project_commit, rollout_project_commit)
+        )
+        if not assisted and invalid_commits:
+            raise ValueError(f"autonomous rollout has invalid project commit provenance: {path}")
+        if not assisted and (
+            bool(source.attrs.get("policy_project_dirty", True))
+            or bool(source.attrs.get("rollout_project_dirty", True))
+        ):
+            raise ValueError(f"autonomous rollout was produced by a dirty project checkout: {path}")
+        if not assisted and project_commit != rollout_project_commit:
+            raise ValueError(f"policy and rollout project commits differ in {path}")
         if not assisted and not context:
             raise ValueError(f"autonomous rollout does not identify its held-out initial-state context: {path}")
         if not assisted and success_predicate != SUCCESS_PREDICATE_VERSION:
@@ -125,6 +142,8 @@ def read_episode(path: Path, *, allow_assisted: bool) -> Episode:
             policy=policy,
             checkpoint=checkpoint,
             checkpoint_sha256=checkpoint_sha256,
+            project_commit=project_commit,
+            rollout_project_commit=rollout_project_commit,
             residual_weight=residual_weight,
             context=context,
             success_predicate=success_predicate,
@@ -146,12 +165,15 @@ def summarize(
     policies = sorted({episode.policy for episode in episodes})
     checkpoints = sorted({episode.checkpoint for episode in episodes if episode.checkpoint})
     checkpoint_digests = sorted({episode.checkpoint_sha256 for episode in episodes if episode.checkpoint_sha256})
+    project_commits = sorted({episode.project_commit for episode in episodes if episode.project_commit})
     if len(policies) != 1:
         violations.append(f"expected one policy, found {policies}")
     if len(checkpoints) != 1:
         violations.append(f"expected one checkpoint, found {checkpoints}")
     if len(checkpoint_digests) != 1:
         violations.append(f"expected one checkpoint SHA-256, found {checkpoint_digests}")
+    if len(project_commits) != 1:
+        violations.append(f"expected one project commit, found {project_commits}")
 
     per_skill: dict[str, object] = {}
     all_timings: list[np.ndarray] = []
@@ -194,6 +216,7 @@ def summarize(
         "policy": policies[0] if len(policies) == 1 else None,
         "checkpoint": checkpoints[0] if len(checkpoints) == 1 else None,
         "checkpoint_sha256": checkpoint_digests[0] if len(checkpoint_digests) == 1 else None,
+        "project_commit": project_commits[0] if len(project_commits) == 1 else None,
         "required_skills": list(required_skills),
         "episode_count": len(used),
         "successes": sum(episode.success for episode in used),
@@ -217,6 +240,7 @@ def summarize(
                 "context": episode.context,
                 "success_predicate": episode.success_predicate,
                 "checkpoint_sha256": episode.checkpoint_sha256,
+                "project_commit": episode.project_commit,
                 "success_hold_steps": episode.success_hold_steps,
                 "success": episode.success,
                 "steps": episode.steps,
