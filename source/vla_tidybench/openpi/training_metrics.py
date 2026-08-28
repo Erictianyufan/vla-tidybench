@@ -314,6 +314,43 @@ class JsonlTrainingMetrics:
         return True
 
 
+def install_wandb_metrics_after_init(
+    official: Any,
+    *,
+    metrics_path: Path,
+    run_metadata: Mapping[str, Any],
+) -> None:
+    """Install local metric capture after OpenPI initializes WandB.
+
+    ``wandb.init(mode="disabled")`` replaces ``wandb.log`` with a no-op.  The
+    hook therefore has to be installed after OpenPI calls ``init_wandb`` rather
+    than before ``official.main`` starts.
+    """
+
+    metric_logger: JsonlTrainingMetrics | None = None
+    original_init_wandb = official.init_wandb
+
+    def init_wandb_and_install(*positional: object, **keywords: object) -> object:
+        nonlocal metric_logger
+        result = original_init_wandb(*positional, **keywords)
+        downstream_log = official.wandb.log
+
+        def log_locally(payload: Mapping[str, Any], *args: object, **kwargs: object) -> object:
+            nonlocal metric_logger
+            if metric_logger is None:
+                # OpenPI creates, resumes, or wipes checkpoint_dir in
+                # initialize_checkpoint_dir before init_wandb runs.
+                metric_logger = JsonlTrainingMetrics(metrics_path, run_metadata)
+            step = kwargs.get("step", args[0] if args else None)
+            metric_logger.log(payload, step=step)
+            return downstream_log(payload, *args, **kwargs)
+
+        official.wandb.log = log_locally
+        return result
+
+    official.init_wandb = init_wandb_and_install
+
+
 def validate_completed_training_run(
     run_dir: Path,
     *,

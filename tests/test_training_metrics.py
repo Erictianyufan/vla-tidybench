@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -10,6 +11,7 @@ from vla_tidybench.openpi.training_metrics import (
     OPENPI_PROVENANCE_PATHS,
     JsonlTrainingMetrics,
     build_resume_provenance,
+    install_wandb_metrics_after_init,
     lerobot_dataset_path,
     source_tree_fingerprint,
     validate_completed_training_run,
@@ -65,6 +67,33 @@ def test_numeric_metrics_are_appended_with_run_provenance(tmp_path: Path) -> Non
     assert record["mode"] == "full"
     assert record["loss"] == pytest.approx(1.5)
     assert isinstance(record["session_id"], str)
+
+
+def test_wandb_metric_hook_is_installed_after_disabled_init(tmp_path: Path) -> None:
+    delegated: list[tuple[dict[str, object], int | None]] = []
+    wandb = SimpleNamespace(log=lambda *_args, **_kwargs: None)
+    official = SimpleNamespace(wandb=wandb)
+
+    def init_wandb(*_args: object, **_kwargs: object) -> None:
+        # This mirrors wandb.init(mode="disabled"), which replaces wandb.log.
+        official.wandb.log = lambda data, *, step=None: delegated.append((data, step))
+
+    official.init_wandb = init_wandb
+    path = tmp_path / "train_metrics.jsonl"
+    install_wandb_metrics_after_init(
+        official,
+        metrics_path=path,
+        run_metadata={"experiment": "stage1-lora", "resumed": True},
+    )
+
+    official.init_wandb(object(), resuming=True, enabled=False)
+    official.wandb.log({"camera_views": []}, step=0)
+    official.wandb.log(payload(), step=501)
+
+    [record] = records(path)
+    assert record["step"] == 501
+    assert record["resumed"] is True
+    assert delegated == [({"camera_views": []}, 0), (payload(), 501)]
 
 
 def test_resume_session_can_replay_steps_after_latest_checkpoint(tmp_path: Path) -> None:

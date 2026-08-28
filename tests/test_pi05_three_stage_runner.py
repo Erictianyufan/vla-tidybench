@@ -97,10 +97,9 @@ def test_stage_completion_rejects_checkpoint_tampering(tmp_path: Path) -> None:
 
 def test_train_wrapper_installs_local_metric_logging() -> None:
     source = (ROOT / "scripts" / "train_drawer_pi05.py").read_text(encoding="utf-8")
-    assert "JsonlTrainingMetrics" in source
     assert '"train_metrics.jsonl"' in source
     assert '"num_train_steps": config.num_train_steps' in source
-    assert "official.wandb.log = log_locally" in source
+    assert "install_wandb_metrics_after_init(" in source
     assert "validate_completed_training_run(" in source
     assert source.index("checkpoint_fingerprint(dataset_path)") < source.index(
         "wait_for_exclusive_gpus("

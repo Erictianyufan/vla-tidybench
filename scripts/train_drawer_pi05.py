@@ -16,9 +16,9 @@ from vla_tidybench.openpi.deployment import (
 )
 from vla_tidybench.openpi.gpu_preflight import selected_gpu_indices, wait_for_exclusive_gpus
 from vla_tidybench.openpi.training_metrics import (
-    JsonlTrainingMetrics,
     build_resume_provenance,
     build_training_provenance,
+    install_wandb_metrics_after_init,
     lerobot_dataset_path,
     source_tree_fingerprint,
     validate_completed_training_run,
@@ -176,7 +176,6 @@ def main() -> int:
             Path(str(config.checkpoint_dir)),
             metrics_path,
         )
-    metric_logger = None
     metric_metadata = {
         "config": config.name,
         "experiment": config.exp_name,
@@ -203,19 +202,11 @@ def main() -> int:
         **resume_provenance,
         **training_provenance,
     }
-    original_wandb_log = official.wandb.log
-
-    def log_locally(payload, *positional, **keywords):
-        nonlocal metric_logger
-        if metric_logger is None:
-            # OpenPI creates, resumes, or wipes checkpoint_dir before its first
-            # wandb.log call, so lazy construction observes the final run state.
-            metric_logger = JsonlTrainingMetrics(metrics_path, metric_metadata)
-        step = keywords.get("step", positional[0] if positional else None)
-        metric_logger.log(payload, step=step)
-        return original_wandb_log(payload, *positional, **keywords)
-
-    official.wandb.log = log_locally
+    install_wandb_metrics_after_init(
+        official,
+        metrics_path=metrics_path,
+        run_metadata=metric_metadata,
+    )
     official.main(config)
     if dataset_path is not None:
         validate_dataset_fingerprint(
