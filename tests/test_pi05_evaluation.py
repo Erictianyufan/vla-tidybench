@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,6 +29,21 @@ assert SUITE_SPEC is not None and SUITE_SPEC.loader is not None
 evaluation_suite = importlib.util.module_from_spec(SUITE_SPEC)
 sys.modules[SUITE_SPEC.name] = evaluation_suite
 SUITE_SPEC.loader.exec_module(evaluation_suite)
+
+
+def test_eval_suite_cli_resolves_local_package_without_pythonpath() -> None:
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "run_pi05_eval_suite.py"), "--help"],
+        cwd=ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def write_rollout(

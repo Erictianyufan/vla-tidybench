@@ -7,10 +7,16 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOT = PROJECT_ROOT / "source"
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
+
 import h5py
-from vla_tidybench.evaluation_contexts import validate_context_lock
+from vla_tidybench.evaluation_contexts import validate_context_lock  # noqa: E402
 
 SKILLS = ("open", "pick", "place", "close")
 DEFAULT_MAX_STEPS = {"open": 360, "pick": 300, "place": 420, "close": 300}
@@ -57,7 +63,7 @@ def load_contexts(
             names = sorted_episode_names(dataset["data"])
         if any(index < 0 or index >= len(names) for index in indices):
             raise ValueError(f"{expected_name} contains an out-of-range episode index")
-        for seed, index in zip(seeds, indices, strict=False):
+        for seed, index in zip(seeds, indices):
             contexts[(skill, seed)] = (source_path, names[index])
     return contexts
 
