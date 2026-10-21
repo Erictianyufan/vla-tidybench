@@ -27,6 +27,7 @@ parser.add_argument("--max_steps", type=int, default=720)
 parser.add_argument("--seed", type=int, default=101)
 parser.add_argument("--overwrite", action="store_true")
 parser.add_argument("--showcase", action="store_true", help="record the furnished scene and hero camera")
+parser.add_argument("--home-tabletop", action="store_true", help="PICK-only: lift the complete scene onto a physical table in a home-study set")
 parser.add_argument("--policy-host", help="query a live pi0.5 server and compose its bounded residual")
 parser.add_argument("--policy-port", type=int, default=8000)
 parser.add_argument("--policy-residual-weight", type=float, default=0.0001)
@@ -45,6 +46,12 @@ if args_cli.num_demos < 1 or args_cli.max_attempts < args_cli.num_demos:
     parser.error("invalid demo/attempt count")
 if args_cli.policy_host and not 0.0 < args_cli.policy_residual_weight <= 0.05:
     parser.error("--policy-residual-weight must be in (0, 0.05]")
+if args_cli.home_tabletop:
+    if args_cli.skill != "pick":
+        parser.error("--home-tabletop currently supports --skill pick only")
+    if args_cli.actions_only:
+        parser.error("--home-tabletop requires cameras for the three-view demo")
+    args_cli.showcase = True
 
 faulthandler.enable()
 faulthandler.dump_traceback_later(45, repeat=False)
@@ -78,7 +85,11 @@ from isaaclab.utils.math import compute_pose_error  # noqa: E402
 
 _startup_mark("isaac_utils")
 
-from vla_tidybench.isaac import TidyBenchDrawerEnvCfg, TidyBenchDrawerShowcaseEnvCfg  # noqa: E402
+from vla_tidybench.isaac import (  # noqa: E402
+    TidyBenchDrawerEnvCfg,
+    TidyBenchDrawerShowcaseEnvCfg,
+    TidyBenchHomeTablePickEnvCfg,
+)
 from vla_tidybench.policy_bridge.action_adapter import ActionAdapter  # noqa: E402
 from vla_tidybench.policy_bridge.websocket_client import PolicyClient  # noqa: E402
 
@@ -93,6 +104,8 @@ PROMPTS = {
     "close": "close the top drawer",
     "full": "put the medicine bottle into the top drawer and close it",
 }
+if args_cli.home_tabletop:
+    PROMPTS["pick"] = "pick up the medicine bottle from the home table"
 
 
 def skill_for_phase(phase: Phase) -> str:
@@ -118,6 +131,7 @@ class Phase(enum.Enum):
     PICK_DESCEND = enum.auto()
     PICK_CLOSE = enum.auto()
     PICK_LIFT = enum.auto()
+    PICK_HOLD = enum.auto()
     PLACE_CLEARANCE = enum.auto()
     PLACE_ABOVE = enum.auto()
     PLACE_DESCEND = enum.auto()
@@ -140,9 +154,10 @@ class DrawerTeacher:
     handle_quat = (0.5, 0.5, 0.5, 0.5)  # xyzw, aligned with the horizontal handle
     down_quat = (1.0, 0.0, 0.0, 0.0)  # xyzw, gripper pointing down
 
-    def __init__(self, env, skill: str, seed: int) -> None:
+    def __init__(self, env, skill: str, seed: int, height_offset: float = 0.0) -> None:
         self.env = env
         self.skill = skill
+        self.height_offset = height_offset
         self.device = env.device
         self.rng = np.random.default_rng(seed)
         self.drawer_joint_idx = env.scene["cabinet"].find_joints("drawer_top_joint")[0][0]
@@ -234,7 +249,9 @@ class DrawerTeacher:
         return Phase.DONE if self.skill == "open" else Phase.PICK_ABOVE
 
     def _after_pick(self) -> Phase:
-        return Phase.DONE if self.skill == "pick" else Phase.PLACE_CLEARANCE
+        if self.skill == "pick":
+            return Phase.PICK_HOLD if self.height_offset else Phase.DONE
+        return Phase.PLACE_CLEARANCE
 
     def _after_place(self) -> Phase:
         return Phase.DONE if self.skill == "place" else Phase.CLOSE_APPROACH
@@ -326,15 +343,23 @@ class DrawerTeacher:
             # each frame would create a moving target and never converge.
             target = obj.clone()
             target[:, :2] += torch.tensor(self.pick_jitter, dtype=torch.float32, device=self.device)
-            target[:, 2] = 0.30
+            target[:, 2] = 0.30 + self.height_offset
             action = self._pose_action(target, self.down_quat, -1.0, pos_threshold=0.025)
-            if float(obj[0, 2]) >= 0.18:
-                if float(obj[0, 2]) < 0.12:
+            if float(obj[0, 2]) >= 0.18 + self.height_offset:
+                if float(obj[0, 2]) < 0.12 + self.height_offset:
                     self.last_reason = f"grasp failed, object z={float(obj[0, 2]):.3f}"
                     self._set_phase(Phase.FAILED)
                 else:
                     self._set_phase(self._after_pick())
             return action
+
+        if self.phase is Phase.PICK_HOLD:
+            if float(obj[0, 2]) < 0.18 + self.height_offset:
+                self.last_reason = "object dropped during tabletop hold"
+                self._set_phase(Phase.FAILED)
+            elif self.phase_steps >= 15:
+                self._set_phase(Phase.DONE)
+            return self._hold(-1.0)
 
         if self.phase is Phase.PLACE_CLEARANCE:
             if self.fixed_target is None:
@@ -542,7 +567,7 @@ class DrawerTeacher:
         if self.skill == "open":
             return self._drawer_pos() >= 0.30
         if self.skill == "pick":
-            return float(self._object()[0, 2]) >= 0.12
+            return float(self._object()[0, 2]) >= 0.18 + self.height_offset
         if self.skill == "place":
             return self._object_in_drawer()
         if self.skill == "close":
@@ -555,7 +580,11 @@ def make_cfg() -> TidyBenchDrawerEnvCfg:
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists() and args_cli.overwrite:
         output.unlink()
-    cfg = TidyBenchDrawerShowcaseEnvCfg() if args_cli.showcase else TidyBenchDrawerEnvCfg()
+    cfg = (
+        TidyBenchHomeTablePickEnvCfg()
+        if args_cli.home_tabletop
+        else TidyBenchDrawerShowcaseEnvCfg() if args_cli.showcase else TidyBenchDrawerEnvCfg()
+    )
     cfg.sim.device = args_cli.device
     if args_cli.actions_only:
         cfg.scene.table_cam = None
@@ -603,6 +632,7 @@ def add_metadata(
     successes: int,
     successful_phase_traces: list[list[str]],
     successful_policy_payloads: list[dict[str, object]],
+    successful_hero_frames: list[np.ndarray],
 ) -> None:
     with h5py.File(path, "r+") as dataset:
         data = dataset["data"]
@@ -612,15 +642,17 @@ def add_metadata(
         data.attrs["attempts"] = attempts
         data.attrs["successful_episodes"] = successes
         data.attrs["seed"] = args_cli.seed
+        data.attrs["scene_variant"] = "home_tabletop_pick" if args_cli.home_tabletop else "original_drawer"
         string_type = h5py.string_dtype(encoding="utf-8")
         payloads = successful_policy_payloads or [{} for _ in successful_phase_traces]
-        for demo, phase_trace, payload in zip(
-            data.values(), successful_phase_traces, payloads, strict=True
+        for demo, phase_trace, payload, hero_frames in zip(
+            data.values(), successful_phase_traces, payloads, successful_hero_frames, strict=True
         ):
             demo.attrs["source"] = "scripted_truth_teacher"
             demo.attrs["teacher_version"] = TEACHER_VERSION
             demo.attrs["skill"] = args_cli.skill
             demo.attrs["language_instruction"] = PROMPTS[args_cli.skill]
+            demo.attrs["scene_variant"] = data.attrs["scene_variant"]
             demo.create_dataset(
                 "teacher_phase",
                 data=np.asarray(phase_trace, dtype=object),
@@ -644,13 +676,22 @@ def add_metadata(
                     data=np.asarray(payload["prompts"], dtype=object),
                     dtype=string_type,
                 )
+            elif len(hero_frames):
+                demo.attrs["policy"] = (
+                    "scripted-truth-teacher-home-tabletop"
+                    if args_cli.home_tabletop
+                    else "scripted-teacher-camera-preview"
+                )
+                demo.create_dataset("hero_cam", data=hero_frames, compression="gzip")
 
 
 def main() -> int:
     faulthandler.cancel_dump_traceback_later()
     output = args_cli.dataset_file.resolve()
     env = gym.make("Isaac-Open-Drawer-Franka-IK-Rel-v0", cfg=make_cfg()).unwrapped
-    teacher = DrawerTeacher(env, args_cli.skill, args_cli.seed)
+    teacher = DrawerTeacher(
+        env, args_cli.skill, args_cli.seed, height_offset=0.75 if args_cli.home_tabletop else 0.0
+    )
     adapter = ActionAdapter()
     policy_client = (
         PolicyClient(args_cli.policy_host, args_cli.policy_port, timeout_s=120.0)
@@ -661,15 +702,17 @@ def main() -> int:
     successes = 0
     successful_phase_traces: list[list[str]] = []
     successful_policy_payloads: list[dict[str, object]] = []
+    successful_hero_frames: list[np.ndarray] = []
     started = time.monotonic()
     try:
         while successes < args_cli.num_demos and attempts < args_cli.max_attempts and simulation_app.is_running():
             attempts += 1
             env.reset(seed=args_cli.seed + attempts - 1)
             if args_cli.showcase:
+                offset = 0.75 if args_cli.home_tabletop else 0.0
                 env.scene["hero_cam"].set_world_poses_from_view(
-                    eyes=torch.tensor([[-1.85, -2.35, 1.65]], device=env.device),
-                    targets=torch.tensor([[0.50, 0.0, 0.58]], device=env.device),
+                    eyes=torch.tensor([[-1.85, -2.35, 1.65 + offset]], device=env.device),
+                    targets=torch.tensor([[0.50, 0.0, 0.58 + offset]], device=env.device),
                 )
                 for _ in range(3):
                     env.sim.render()
@@ -782,6 +825,7 @@ def main() -> int:
             if succeeded:
                 successes += 1
                 successful_phase_traces.append(phase_trace)
+                successful_hero_frames.append(np.asarray(hero_frames, dtype=np.uint8))
                 if policy_client is not None:
                     successful_policy_payloads.append(
                         {
@@ -803,6 +847,7 @@ def main() -> int:
                 successes,
                 successful_phase_traces,
                 successful_policy_payloads,
+                successful_hero_frames,
             )
         summary = {
             "teacher": TEACHER_VERSION,
