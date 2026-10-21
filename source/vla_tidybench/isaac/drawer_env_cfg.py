@@ -297,7 +297,9 @@ class TidyBenchHomeTablePickEnvCfg(TidyBenchDrawerShowcaseEnvCfg):
         for x_label, x in (("left", -0.47), ("right", 1.37)):
             for y_label, y in (("front", -0.49), ("back", 0.49)):
                 box(f"table_leg_{x_label}_{y_label}", (0.08, 0.08, z - 0.08), (x, y, (z - 0.08) / 2), (0.40, 0.24, 0.13))
-        box("oak_floor", (7.0, 7.0, 0.025), (0.0, 0.0, -0.015), (0.70, 0.58, 0.43))
+        # Keep the visual floor slightly above the default ground plane so
+        # its oak finish, rather than the black physics grid, is visible.
+        box("oak_floor", (7.0, 7.0, 0.025), (0.0, 0.0, 0.025), (0.70, 0.58, 0.43))
         box("cream_back_wall", (7.0, 0.06, 3.1), (0.0, 2.5, 1.55), (0.89, 0.85, 0.76))
         box("warm_side_wall", (0.06, 5.0, 3.1), (2.7, 0.0, 1.55), (0.83, 0.78, 0.69))
         box("window_glass", (1.5, 0.025, 0.9), (-0.85, 2.44, 1.94), (0.60, 0.76, 0.82))
