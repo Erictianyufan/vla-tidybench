@@ -6,6 +6,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 COLLECTOR = PROJECT_ROOT / "scripts" / "collect_scripted_drawer.py"
 ENV_CFG = PROJECT_ROOT / "source" / "vla_tidybench" / "isaac" / "drawer_env_cfg.py"
+HOME_FLOOR = PROJECT_ROOT / "assets" / "home_oak_floor.usda"
+HOME_FLOOR_TEXTURE = PROJECT_ROOT / "assets" / "home_oak_floor.png"
 
 
 def _source(path: Path) -> str:
@@ -61,3 +63,16 @@ def test_home_tabletop_full_shifts_placement_and_preserves_policy_priority() -> 
     assert "0.68 + self.height_offset < obj[2] < 0.86 + self.height_offset" in text
     assert "compose_policy_first(" in text
     assert 'parser.error("--policy-first requires --policy-host")' in text
+
+
+def test_home_tabletop_uses_portable_textured_floor() -> None:
+    text = _source(ENV_CFG).split("class TidyBenchHomeTablePickEnvCfg", 1)[1]
+    assert "self.scene.room = None" in text
+    assert 'setattr(self.scene, prop, None)' in text
+    assert 'home_oak_floor.usda' in text
+    assert 'floor_board_joint_' not in text
+    floor = HOME_FLOOR.read_text(encoding="utf-8")
+    assert 'defaultPrim = "OakFloor"' in floor
+    assert 'UsdUVTexture' in floor
+    assert '@./home_oak_floor.png@' in floor
+    assert HOME_FLOOR_TEXTURE.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
