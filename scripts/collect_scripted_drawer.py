@@ -903,6 +903,22 @@ def main() -> int:
                 print(f"SUCCESS {successes}/{args_cli.num_demos} in {step + 1} steps", flush=True)
             else:
                 print(f"FAILED: {teacher.last_reason or teacher.phase.name}", flush=True)
+                if policy_actions:
+                    for skill_name in dict.fromkeys(policy_skills):
+                        mask = np.asarray(policy_skills) == skill_name
+                        proposed_skill = np.asarray(policy_raw_actions)[mask]
+                        reference_skill = np.asarray(dls_reference_actions)[mask]
+                        executed_skill = np.asarray(executed_actions)[mask]
+                        correction_skill = np.asarray(correction_actions)[mask]
+                        print(
+                            "  diagnostic "
+                            f"skill={skill_name} steps={int(mask.sum())} "
+                            f"policy_close_fraction={float(np.mean(proposed_skill[:, 6] < 0)):.3f} "
+                            f"teacher_close_fraction={float(np.mean(reference_skill[:, 6] < 0)):.3f} "
+                            f"executed_close_fraction={float(np.mean(executed_skill[:, 6] < 0)):.3f} "
+                            f"mean_correction_norm={float(np.mean(np.linalg.norm(correction_skill[:, :6], axis=1))):.3f}",
+                            flush=True,
+                        )
         env.recorder_manager.close()
         if output.exists():
             add_metadata(
