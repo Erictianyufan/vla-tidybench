@@ -714,6 +714,11 @@ def main() -> int:
                     eyes=torch.tensor([[-1.85, -2.35, 1.65 + offset]], device=env.device),
                     targets=torch.tensor([[0.50, 0.0, 0.58 + offset]], device=env.device),
                 )
+                if args_cli.home_tabletop:
+                    env.scene["table_cam"].set_world_poses_from_view(
+                        eyes=torch.tensor([[0.45, -1.35, 1.90]], device=env.device),
+                        targets=torch.tensor([[0.25, -0.10, 0.98]], device=env.device),
+                    )
                 for _ in range(3):
                     env.sim.render()
             initialize_skill_state(env, args_cli.skill)
