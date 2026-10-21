@@ -63,11 +63,11 @@ def main() -> None:
         canvas.paste(table_image, (815, 455))
         canvas.paste(wrist_image, (1045, 455))
         draw = ImageDraw.Draw(canvas)
-        draw.rectangle((0, 0, 1280, 72), fill=(12, 18, 28))
+        is_home_tabletop = policy == "scripted-truth-teacher-home-tabletop"
+        draw.rectangle((0, 0, 1280, 105 if is_home_tabletop else 72), fill=(12, 18, 28))
         frame_prompt = prompts[index] if prompts else prompt
         frame_skill = skills[index].upper() if skills else ""
         is_preview = policy == "scripted-teacher-camera-preview"
-        is_home_tabletop = policy == "scripted-truth-teacher-home-tabletop"
         is_recovery = "dls-contact-recovery" in policy
         is_continuous = "continuous-recovery" in policy or "live-recovery" in policy
         if is_home_tabletop:
@@ -101,7 +101,7 @@ def main() -> None:
             footer = f"warm inference ~{mean_infer:.0f} ms | pi0.5 + DLS recovery"
         else:
             footer = policy if is_preview else f"warm inference ~{mean_infer:.0f} ms | {policy}"
-        draw.text((760, 78), footer, font=small, fill="white")
+        draw.text((22, 77) if is_home_tabletop else (760, 78), footer, font=small, fill="white")
         frames.append(np.asarray(canvas))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     ffmpeg = os.environ.get("FFMPEG_BIN", "ffmpeg")
