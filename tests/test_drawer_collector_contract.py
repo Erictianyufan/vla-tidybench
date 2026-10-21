@@ -51,3 +51,13 @@ def test_skill_prerequisites_are_part_of_recorded_reset_state() -> None:
     assert 'if args_cli.skill in ("place", "close")' in text
     assert 'joint_pos["drawer_top_joint"] = 0.36' in text
     assert "reset_to" not in text
+
+
+def test_home_tabletop_full_shifts_placement_and_preserves_policy_priority() -> None:
+    text = _source(COLLECTOR)
+    assert 'args_cli.skill not in ("pick", "full")' in text
+    for height in ("0.82", "0.86", "0.88"):
+        assert f"self.fixed_target[:, 2] = {height} + self.height_offset" in text
+    assert "0.68 + self.height_offset < obj[2] < 0.86 + self.height_offset" in text
+    assert "compose_policy_first(" in text
+    assert 'parser.error("--policy-first requires --policy-host")' in text

@@ -30,12 +30,16 @@ parser.add_argument("--showcase", action="store_true", help="record the furnishe
 parser.add_argument(
     "--home-tabletop",
     action="store_true",
-    help="PICK-only: lift the complete scene onto a physical table in a home-study set",
+    help="PICK or FULL: lift the complete scene onto a physical table in a home-study set",
 )
 parser.add_argument("--policy-host", help="query a live pi0.5 server and compose its bounded residual")
 parser.add_argument("--policy-port", type=int, default=8000)
 parser.add_argument("--policy-residual-weight", type=float, default=0.0001)
 parser.add_argument("--policy-replan-steps", type=int, default=4)
+parser.add_argument(
+    "--policy-first", action="store_true", help="execute pi0.5 actions with only a bounded DLS correction"
+)
+parser.add_argument("--dls-max-correction-norm", type=float, default=0.10)
 parser.add_argument(
     "--actions-only",
     action="store_true",
@@ -48,11 +52,15 @@ if args_cli.dataset_file.exists() and not args_cli.overwrite:
     parser.error(f"dataset exists: {args_cli.dataset_file}; pass --overwrite")
 if args_cli.num_demos < 1 or args_cli.max_attempts < args_cli.num_demos:
     parser.error("invalid demo/attempt count")
-if args_cli.policy_host and not 0.0 < args_cli.policy_residual_weight <= 0.05:
+if args_cli.policy_host and not args_cli.policy_first and not 0.0 < args_cli.policy_residual_weight <= 0.05:
     parser.error("--policy-residual-weight must be in (0, 0.05]")
+if args_cli.policy_first and not args_cli.policy_host:
+    parser.error("--policy-first requires --policy-host")
+if args_cli.policy_first and not 0.0 <= args_cli.dls_max_correction_norm <= 0.25:
+    parser.error("--dls-max-correction-norm must be in [0, 0.25]")
 if args_cli.home_tabletop:
-    if args_cli.skill != "pick":
-        parser.error("--home-tabletop currently supports --skill pick only")
+    if args_cli.skill not in ("pick", "full"):
+        parser.error("--home-tabletop supports --skill pick or full")
     if args_cli.actions_only:
         parser.error("--home-tabletop requires cameras for the three-view demo")
     args_cli.showcase = True
@@ -95,6 +103,7 @@ from vla_tidybench.isaac import (  # noqa: E402
     TidyBenchHomeTablePickEnvCfg,
 )
 from vla_tidybench.policy_bridge.action_adapter import ActionAdapter  # noqa: E402
+from vla_tidybench.policy_bridge.policy_first import compose_policy_first  # noqa: E402
 from vla_tidybench.policy_bridge.websocket_client import PolicyClient  # noqa: E402
 
 _startup_mark("drawer_cfg")
@@ -108,7 +117,7 @@ PROMPTS = {
     "close": "close the top drawer",
     "full": "put the medicine bottle into the top drawer and close it",
 }
-if args_cli.home_tabletop:
+if args_cli.home_tabletop and args_cli.skill == "pick":
     PROMPTS["pick"] = "pick up the medicine bottle from the home table"
 
 
@@ -368,7 +377,7 @@ class DrawerTeacher:
         if self.phase is Phase.PLACE_CLEARANCE:
             if self.fixed_target is None:
                 self.fixed_target = self._eef()[0].clone()
-                self.fixed_target[:, 2] = 0.82
+                self.fixed_target[:, 2] = 0.82 + self.height_offset
             action = self._pose_action(
                 self.fixed_target,
                 self.down_quat,
@@ -388,7 +397,7 @@ class DrawerTeacher:
                 self.fixed_target[:, 1] = -0.10 + torch.tensor(
                     self.place_jitter[1], dtype=torch.float32, device=self.device
                 )
-                self.fixed_target[:, 2] = 0.86
+                self.fixed_target[:, 2] = 0.86 + self.height_offset
             action = self._pose_action(
                 self.fixed_target,
                 self.down_quat,
@@ -410,7 +419,7 @@ class DrawerTeacher:
                 self.fixed_target[:, 1] = -0.10 + torch.tensor(
                     self.place_jitter[1], dtype=torch.float32, device=self.device
                 )
-                self.fixed_target[:, 2] = 0.86
+                self.fixed_target[:, 2] = 0.86 + self.height_offset
             action = self._pose_action(
                 self.fixed_target,
                 self.down_quat,
@@ -431,7 +440,7 @@ class DrawerTeacher:
                 )
                 # A tall pharmacy bottle is released above the shallow
                 # drawer instead of forcing the gripper through the opening.
-                self.fixed_target[:, 2] = 0.88
+                self.fixed_target[:, 2] = 0.88 + self.height_offset
             action = self._pose_action(
                 self.fixed_target,
                 self.down_quat,
@@ -565,7 +574,11 @@ class DrawerTeacher:
         handle_x = self._handle()[0, 0]
         # The 4.5 cm cuboid center must be at least one half-width plus a
         # small margin behind the handle/front-plane proxy.
-        return bool(obj[2] > 0.68 and obj[2] < 0.86 and obj[0] > handle_x + 0.023 and abs(obj[1]) < 0.26)
+        return bool(
+            0.68 + self.height_offset < obj[2] < 0.86 + self.height_offset
+            and obj[0] > handle_x + 0.023
+            and abs(obj[1]) < 0.26
+        )
 
     def success(self) -> bool:
         if self.skill == "open":
@@ -646,13 +659,18 @@ def add_metadata(
         data.attrs["attempts"] = attempts
         data.attrs["successful_episodes"] = successes
         data.attrs["seed"] = args_cli.seed
-        data.attrs["scene_variant"] = "home_tabletop_pick" if args_cli.home_tabletop else "original_drawer"
+        data.attrs["scene_variant"] = (
+            f"home_tabletop_{args_cli.skill}" if args_cli.home_tabletop else "original_drawer"
+        )
         string_type = h5py.string_dtype(encoding="utf-8")
         payloads = successful_policy_payloads or [{} for _ in successful_phase_traces]
         for demo, phase_trace, payload, hero_frames in zip(
             data.values(), successful_phase_traces, payloads, successful_hero_frames, strict=True
         ):
-            demo.attrs["source"] = "scripted_truth_teacher"
+            demo.attrs["source"] = (
+                "pi0.5_policy_with_bounded_truth_guided_dls"
+                if args_cli.policy_first else "scripted_truth_teacher"
+            )
             demo.attrs["teacher_version"] = TEACHER_VERSION
             demo.attrs["skill"] = args_cli.skill
             demo.attrs["language_instruction"] = PROMPTS[args_cli.skill]
@@ -663,13 +681,25 @@ def add_metadata(
                 dtype=string_type,
             )
             if payload:
-                demo.attrs["policy"] = "pi0.5-four-skill-lora+dls-live-recovery"
-                demo.attrs["policy_residual_weight"] = args_cli.policy_residual_weight
+                demo.attrs["policy"] = (
+                    "pi0.5-four-skill-lora-primary+bounded-dls"
+                    if args_cli.policy_first else "pi0.5-four-skill-lora+dls-live-recovery"
+                )
+                demo.attrs["control_mode"] = "policy_first" if args_cli.policy_first else "teacher_first"
+                if args_cli.policy_first:
+                    demo.attrs["dls_max_correction_norm"] = args_cli.dls_max_correction_norm
+                else:
+                    demo.attrs["policy_residual_weight"] = args_cli.policy_residual_weight
                 demo.attrs["mean_infer_ms"] = float(payload["mean_infer_ms"])
+                demo.attrs["inference_calls"] = int(payload["inference_calls"])
                 demo.create_dataset("hero_cam", data=payload["hero_cam"], compression="gzip")
                 demo.create_dataset(
                     "policy_actions", data=payload["policy_actions"], compression="gzip"
                 )
+                for name in (
+                    "policy_raw_actions", "dls_reference_actions", "correction_actions", "executed_actions"
+                ):
+                    demo.create_dataset(name, data=payload[name], compression="gzip")
                 demo.create_dataset(
                     "policy_skills",
                     data=np.asarray(payload["skills"], dtype=object),
@@ -732,6 +762,10 @@ def main() -> int:
             phase_trace: list[str] = []
             hero_frames: list[np.ndarray] = []
             policy_actions: list[np.ndarray] = []
+            policy_raw_actions: list[np.ndarray] = []
+            dls_reference_actions: list[np.ndarray] = []
+            correction_actions: list[np.ndarray] = []
+            executed_actions: list[np.ndarray] = []
             policy_skills: list[str] = []
             policy_prompts: list[str] = []
             policy_latencies: list[float] = []
@@ -779,6 +813,7 @@ def main() -> int:
                             if (
                                 policy_chunk.ndim != 2
                                 or policy_chunk.shape[1] != 7
+                                or len(policy_chunk) == 0
                                 or not np.isfinite(policy_chunk).all()
                             ):
                                 raise ValueError(f"malformed policy chunk {policy_chunk.shape}")
@@ -786,14 +821,25 @@ def main() -> int:
                             policy_chunk_skill = active_skill
                         proposed = policy_chunk[policy_chunk_index]
                         policy_chunk_index += 1
-                        raw = base_action[0].detach().cpu().numpy().astype(np.float32)
+                        reference_raw = base_action[0].detach().cpu().numpy().astype(np.float32)
                         proposed_raw = adapter.to_isaac(proposed)
-                        raw[:6] = np.clip(
-                            raw[:6] + args_cli.policy_residual_weight * proposed_raw[:6],
-                            -1.0,
-                            1.0,
-                        )
-                        raw[6] = float(base_action[0, 6])
+                        if args_cli.policy_first:
+                            composed = compose_policy_first(
+                                proposed_raw,
+                                reference_raw,
+                                max_correction_norm=args_cli.dls_max_correction_norm,
+                            )
+                            raw = composed.executed_raw
+                            correction = composed.correction_raw
+                        else:
+                            raw = reference_raw.copy()
+                            raw[:6] = np.clip(
+                                raw[:6] + args_cli.policy_residual_weight * proposed_raw[:6],
+                                -1.0,
+                                1.0,
+                            )
+                            correction = raw - reference_raw
+                            raw[6] = reference_raw[6]
                         action = torch.as_tensor(raw[None], dtype=torch.float32, device=env.device)
                     else:
                         action = base_action
@@ -809,6 +855,10 @@ def main() -> int:
                         )
                     if policy_client is not None:
                         policy_actions.append(proposed.copy())
+                        policy_raw_actions.append(proposed_raw.copy())
+                        dls_reference_actions.append(reference_raw.copy())
+                        correction_actions.append(correction.copy())
+                        executed_actions.append(raw.copy())
                         policy_skills.append(active_skill)
                         policy_prompts.append(PROMPTS[active_skill])
                     if step % 40 == 0:
@@ -840,9 +890,14 @@ def main() -> int:
                         {
                             "hero_cam": np.asarray(hero_frames),
                             "policy_actions": np.asarray(policy_actions, dtype=np.float32),
+                            "policy_raw_actions": np.asarray(policy_raw_actions, dtype=np.float32),
+                            "dls_reference_actions": np.asarray(dls_reference_actions, dtype=np.float32),
+                            "correction_actions": np.asarray(correction_actions, dtype=np.float32),
+                            "executed_actions": np.asarray(executed_actions, dtype=np.float32),
                             "skills": policy_skills,
                             "prompts": policy_prompts,
                             "mean_infer_ms": float(np.mean(policy_latencies)),
+                            "inference_calls": len(policy_latencies),
                         }
                     )
                 print(f"SUCCESS {successes}/{args_cli.num_demos} in {step + 1} steps", flush=True)

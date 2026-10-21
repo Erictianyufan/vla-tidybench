@@ -92,6 +92,8 @@ flowchart LR
 
 记录文件的 `scene_variant=home_tabletop_pick` 和 `policy=scripted-truth-teacher-home-tabletop` 明确区分新场景及控制来源。第一台新机器首次启用 RTX 相机时可能需要较长时间编译光追着色器；后续运行约 20 秒完成这一条轨迹。
 
+家庭桌面 `OPEN → PICK → PLACE → CLOSE` 的 π0.5 主导控制与录制代码已列在[完整任务运行规程](docs/home_tabletop_full_pi05.md)。它需要四技能 LoRA checkpoint 和模型服务；在新的成功轨迹通过动作来源及物理放置核验之前，本页不会把单步抓取演示称作 π0.5 完整任务成果。
+
 ### 连续药瓶长任务
 
 药瓶使用仓库内的程序化 USD 资产，包含瓶身、瓶盖、标签、红十字、碰撞体、质量与摩擦参数。连续 episode 在四个阶段分别发送 `open the top drawer`、`pick up the medicine bottle`、`put the medicine bottle into the top drawer` 和 `close the top drawer`。200-step checkpoint 沿用早期日用品四技能小数据训练，没有为药瓶重新训练；本次演示用于验证新资产和新语言提示下的部署迁移。π0.5 每 4 步重规划一次，受限残差权重为 `0.0001`；DLS 状态机负责接触安全和失败恢复。因此这是 **π0.5-assisted closed loop**，不是纯 π0.5 自主成功，仓库不会把混合控制结果误标为纯模型结果。
