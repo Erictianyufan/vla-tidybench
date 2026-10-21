@@ -1,6 +1,6 @@
 # 家庭桌面完整任务：π0.5 主导控制的录制规程
 
-状态：代码与离线契约已准备；**尚未取得新的四阶段仿真录像**。不得用原版厨房长任务视频或脚本教师视频冒充本场景的 π0.5 成果。
+状态：家庭木地板场景已有一条[四阶段脚本教师预览](media/home-tabletop-full-teacher-wood-preview.mp4)；**尚未取得通过审计的 π0.5 在线闭环录像**。不得用原版厨房长任务视频或脚本教师视频冒充本场景的 π0.5 成果。
 
 家庭场景使用抬高到木桌面的 Franka／抽屉／药瓶工作空间；地板由仓库内 `assets/home_oak_floor.usda` 与 `assets/home_oak_floor.png` 提供真实木纹，而不是 Isaac 默认黑白网格。旧的 Isaac 4.5 Simple_Room 与 YCB 陈列资产不会在家庭场景加载。木纹是视觉材质，地面物理仍由默认地面承担，不改变策略的动作空间。
 
@@ -13,8 +13,8 @@
 ## 运行前条件
 
 - Isaac Sim 6.0.1、Isaac Lab 3.0.0-beta2 和仓库的 Isaac Python 环境。
-- 可实际加载的四技能 π0.5 LoRA checkpoint；仓库发布的视频不是权重文件。
-- 推荐两张 24 GB GPU：GPU 0 跑 Isaac/RTX 相机，GPU 1 跑 OpenPI/JAX 服务。若只有一张仿真 GPU，应将策略服务部署在另一台可连接的机器上，并设置 `POLICY_HOST`。
+- 可实际加载的四技能 π0.5 checkpoint。第三阶段完整权重见[独立权重仓库](https://github.com/Erictianyufan/vla-tidybench-pi05-weights)的 `stage3-hard-recovery-2999-v1` release；训练 loss 不等于闭环任务成功。
+- 仿真与策略应分开部署在两张 GPU 上。单张 12 GB GPU 可以尝试只承担其中一种工作；能否容纳第三阶段完整模型仍以实际加载和推理测试为准。
 - `ffmpeg` 可用。输出目录留足 HDF5 三机位轨迹和 MP4 的空间。
 
 双卡同机运行：
@@ -23,6 +23,8 @@
 PI05_CHECKPOINT=/absolute/path/to/four_skill_lora_checkpoint \
   bash scripts/run_home_tabletop_full_pi05.sh
 ```
+
+上面的同机脚本使用当前分支的 LoRA 服务端，**不能直接加载 Stage-3 完整权重**。Stage-3 应在独立策略机上使用权重发布时的项目提交 `50f868349961e04357356f54e47069642f95abb6`、OpenPI 提交 `15a9616a00943ada6c20a0f158e3adb39df2ccac`，并以 `--mode full --four-skill --dataset-repo scuee_user06/vla_tidybench_drawer_v1_hard_mix` 启动模型服务，再从仿真机指定 `POLICY_HOST`。断点续传与校验七个 release 分片可使用 `scripts/fetch_pi05_stage3_release.sh DESTINATION_DIRECTORY`。
 
 独立的模型服务器已经启动时：
 

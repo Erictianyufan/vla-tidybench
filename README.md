@@ -75,7 +75,7 @@ flowchart LR
 
 这一变体将 Franka、药瓶和收纳柜作为一个整体抬升到 **0.75 m 高的实体木桌**，桌面有碰撞体，药瓶与夹爪仍参与 Isaac 物理仿真。背景改为家庭书房：暖色墙面、木板地面、踢脚线、地毯和家具。视频来自同一条成功 episode 的主视角、桌面视角和腕部视角，同步录制后合成；不是将机器人画面贴在一张背景图上。
 
-本次虚拟机复现使用 Isaac Sim 6.0.1 / Isaac Lab 3.0.0-beta2、单张 RTX 4090，`seed=610`、`1/1` 次尝试成功，91 个控制步。日志中药瓶高度由约 `0.801 m` 升至 `0.953 m`，并进入 15 帧的 `PICK_HOLD` 阶段。**此段使用物体真值与 DLS 的脚本教师控制，不是 π0.5 自主推理**；当前机器没有下载本项目的 π0.5 LoRA checkpoint，因此不能把这段录像作为新场景的 VLA 泛化结果。
+早期虚拟机复现使用 Isaac Sim 6.0.1 / Isaac Lab 3.0.0-beta2、单张 RTX 4090，`seed=610`、`1/1` 次尝试成功，91 个控制步。日志中药瓶高度由约 `0.801 m` 升至 `0.953 m`，并进入 15 帧的 `PICK_HOLD` 阶段。**此段使用物体真值与 DLS 的脚本教师控制，不是 π0.5 自主推理**；录制时没有加载本项目的 π0.5 checkpoint，因此不能把这段录像作为新场景的 VLA 泛化结果。
 
 在同类 Linux Isaac 环境中复现：
 
@@ -92,7 +92,15 @@ flowchart LR
 
 记录文件的 `scene_variant=home_tabletop_pick` 和 `policy=scripted-truth-teacher-home-tabletop` 明确区分新场景及控制来源。第一台新机器首次启用 RTX 相机时可能需要较长时间编译光追着色器；后续运行约 20 秒完成这一条轨迹。
 
-家庭桌面 `OPEN → PICK → PLACE → CLOSE` 的 π0.5 主导控制与录制代码已列在[完整任务运行规程](docs/home_tabletop_full_pi05.md)。它需要四技能 LoRA checkpoint 和模型服务；在新的成功轨迹通过动作来源及物理放置核验之前，本页不会把单步抓取演示称作 π0.5 完整任务成果。
+### 家庭木地板完整流程：物理场景预览
+
+![家庭木地板桌面四阶段连续预览；脚本教师控制](docs/media/home-tabletop-full-teacher-wood-preview.gif)
+
+[观看 20 FPS、21.9 秒三机位完整 MP4](docs/media/home-tabletop-full-teacher-wood-preview.mp4)
+
+新录像在同一条 Isaac episode 内完成开抽屉、抓取药瓶、放入抽屉和关抽屉，共 438 个控制步；机器人与收纳柜位于实体桌面，地板采用木纹材质，不再出现黑白网格。结束时药瓶保持在抽屉内、抽屉闭合。**这条录像只验证新家庭场景和录制链路，控制源是脚本教师；画面已明确标注，不是 π0.5 在线推理成果。**
+
+家庭桌面 `OPEN → PICK → PLACE → CLOSE` 的 π0.5 主导控制与录制代码列在[完整任务运行规程](docs/home_tabletop_full_pi05.md)。第三阶段完整模型权重已在[独立权重仓库](https://github.com/Erictianyufan/vla-tidybench-pi05-weights)发布，闭环评测尚未通过；在新轨迹通过动作来源及物理放置核验之前，本页不会把上述预览称为 π0.5 完整任务成功。
 
 ### 连续药瓶长任务
 
