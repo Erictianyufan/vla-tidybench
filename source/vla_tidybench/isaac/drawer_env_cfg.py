@@ -296,7 +296,12 @@ class TidyBenchHomeTablePickEnvCfg(TidyBenchDrawerShowcaseEnvCfg):
         box("wood_tabletop", (2.20, 1.25, 0.08), (0.45, 0.0, z - 0.04), (0.54, 0.32, 0.17), collision=True)
         for x_label, x in (("left", -0.47), ("right", 1.37)):
             for y_label, y in (("front", -0.49), ("back", 0.49)):
-                box(f"table_leg_{x_label}_{y_label}", (0.08, 0.08, z - 0.08), (x, y, (z - 0.08) / 2), (0.40, 0.24, 0.13))
+                box(
+                    f"table_leg_{x_label}_{y_label}",
+                    (0.08, 0.08, z - 0.08),
+                    (x, y, (z - 0.08) / 2),
+                    (0.40, 0.24, 0.13),
+                )
         # Keep the visual floor slightly above the default ground plane so
         # its oak finish, rather than the black physics grid, is visible.
         box("oak_floor", (7.0, 7.0, 0.025), (0.0, 0.0, 0.025), (0.70, 0.58, 0.43))
