@@ -13,6 +13,17 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 
+def _stage_from_teacher_phase(phase: str) -> str:
+    """Show the executed stage when a teacher preview has no policy-skill trace."""
+    if phase == "SETTLE" or phase.startswith("HANDLE_") or phase == "DRAWER_PULL":
+        return "OPEN"
+    if phase.startswith("PICK_"):
+        return "PICK"
+    if phase.startswith("PLACE_"):
+        return "PLACE"
+    return "CLOSE"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("recording", type=Path)
@@ -59,6 +70,11 @@ def main() -> None:
             if skill_key in recording
             else None
         )
+        teacher_phases = (
+            [value.decode("utf-8") if isinstance(value, bytes) else str(value) for value in recording["teacher_phase"]]
+            if "teacher_phase" in recording
+            else None
+        )
     font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
     small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
     frames: list[np.ndarray] = []
@@ -75,7 +91,12 @@ def main() -> None:
         is_home_full = scene_variant == "home_tabletop_full"
         draw.rectangle((0, 0, 1280, 105 if is_home_tabletop else 72), fill=(12, 18, 28))
         frame_prompt = prompts[index] if prompts else prompt
-        frame_skill = skills[index].upper() if skills else ""
+        if skills:
+            frame_skill = skills[index].upper()
+        elif teacher_phases:
+            frame_skill = _stage_from_teacher_phase(teacher_phases[index])
+        else:
+            frame_skill = ""
         is_preview = policy == "scripted-teacher-camera-preview"
         is_recovery = "dls-contact-recovery" in policy
         is_continuous = "continuous-recovery" in policy or "live-recovery" in policy
@@ -95,14 +116,15 @@ def main() -> None:
             heading = "VLA-TidyBench | Real pi0.5 LoRA closed loop"
         draw.text((22, 10), heading, font=font, fill=(96, 216, 255))
         draw.text((22, 42), f'Prompt: "{frame_prompt}"', font=small, fill="white")
-        if is_continuous or is_home_full:
+        if (is_continuous or is_home_full) and frame_skill:
             draw.rounded_rectangle((850, 8, 980, 58), radius=10, fill=(25, 105, 145))
             draw.text((878, 20), frame_skill, font=font, fill="white")
+        show_success = success and (not is_home_full or index >= len(hero) - args.fps)
         draw.text(
             (1000, 16),
-            "SUCCESS" if success else "ATTEMPT",
+            "SUCCESS" if show_success else "RUNNING",
             font=font,
-            fill=(80, 230, 130) if success else (255, 190, 80),
+            fill=(80, 230, 130) if show_success else (255, 190, 80),
         )
         draw.rectangle((811, 451, 1039, 679), outline=(96, 216, 255), width=3)
         draw.rectangle((1041, 451, 1269, 679), outline=(96, 216, 255), width=3)
