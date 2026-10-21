@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 h5py = pytest.importorskip("h5py", exc_type=ImportError)
-from scripts.validate_home_full_pi05 import validate  # noqa: E402
+validator_path = Path(__file__).resolve().parents[1] / "scripts" / "validate_home_full_pi05.py"
+spec = importlib.util.spec_from_file_location("home_full_validator", validator_path)
+assert spec is not None and spec.loader is not None
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+validate = module.validate
 
 
 def _recording(path, *, correction_size: float = 0.04) -> None:
