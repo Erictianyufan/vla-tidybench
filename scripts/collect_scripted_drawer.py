@@ -27,7 +27,11 @@ parser.add_argument("--max_steps", type=int, default=720)
 parser.add_argument("--seed", type=int, default=101)
 parser.add_argument("--overwrite", action="store_true")
 parser.add_argument("--showcase", action="store_true", help="record the furnished scene and hero camera")
-parser.add_argument("--home-tabletop", action="store_true", help="PICK-only: lift the complete scene onto a physical table in a home-study set")
+parser.add_argument(
+    "--home-tabletop",
+    action="store_true",
+    help="PICK-only: lift the complete scene onto a physical table in a home-study set",
+)
 parser.add_argument("--policy-host", help="query a live pi0.5 server and compose its bounded residual")
 parser.add_argument("--policy-port", type=int, default=8000)
 parser.add_argument("--policy-residual-weight", type=float, default=0.0001)
