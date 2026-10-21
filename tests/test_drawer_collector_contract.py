@@ -42,7 +42,8 @@ def test_place_path_has_explicit_vertical_clearance() -> None:
     assert "PLACE_INSERT" in text
     assert "self.fixed_target[:, 2] = 0.82" in text
     assert "self.place_handle_anchor" in text
-    assert "return Phase.DONE if self.skill == \"pick\" else Phase.PLACE_CLEARANCE" in text
+    assert "return Phase.PICK_HOLD if self.height_offset else Phase.DONE" in text
+    assert "return Phase.PLACE_CLEARANCE" in text
 
 
 def test_skill_prerequisites_are_part_of_recorded_reset_state() -> None:

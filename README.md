@@ -67,6 +67,31 @@ flowchart LR
 
 顶部连续 GIF 使用同一 Isaac episode 中的在线 π0.5 action proposal 与 DLS 安全恢复控制，记录每步语言、模型动作、教师阶段和最终执行动作。它验证了模型服务、动态技能提示、Isaac 闭环、物理抓取和多机位录制能够在一条长轨迹中贯通。
 
+### 家庭桌面抓取：新场景复现
+
+![家庭桌面抓取三机位演示](docs/media/home-tabletop-pick.gif)
+
+[观看 20 FPS 完整 MP4](docs/media/home-tabletop-pick.mp4) · [查看抬起并保持时的验证帧](docs/media/home-tabletop-pick-held.png)
+
+这一变体将 Franka、药瓶和收纳柜作为一个整体抬升到 **0.75 m 高的实体木桌**，桌面有碰撞体，药瓶与夹爪仍参与 Isaac 物理仿真。背景改为家庭书房：暖色墙面、木板地面、踢脚线、地毯和家具。视频来自同一条成功 episode 的主视角、桌面视角和腕部视角，同步录制后合成；不是将机器人画面贴在一张背景图上。
+
+本次虚拟机复现使用 Isaac Sim 6.0.1 / Isaac Lab 3.0.0-beta2、单张 RTX 4090，`seed=610`、`1/1` 次尝试成功，91 个控制步。日志中药瓶高度由约 `0.801 m` 升至 `0.953 m`，并进入 15 帧的 `PICK_HOLD` 阶段。**此段使用物体真值与 DLS 的脚本教师控制，不是 π0.5 自主推理**；当前机器没有下载本项目的 π0.5 LoRA checkpoint，因此不能把这段录像作为新场景的 VLA 泛化结果。
+
+在同类 Linux Isaac 环境中复现：
+
+```bash
+./scripts/run_isaac.sh scripts/collect_scripted_drawer.py \
+  --skill pick --home-tabletop --num_demos 1 --max_attempts 1 \
+  --max_steps 400 --seed 610 --device cuda:0 --enable_cameras --viz none \
+  --dataset_file /home/ubuntu/data/vla-tidybench/eval/home_tabletop_pick.hdf5
+
+/home/ubuntu/env_isaaclab/bin/python scripts/render_pi05_showcase.py \
+  /home/ubuntu/data/vla-tidybench/eval/home_tabletop_pick.hdf5 \
+  docs/media/home-tabletop-pick.mp4 --fps 20
+```
+
+记录文件的 `scene_variant=home_tabletop_pick` 和 `policy=scripted-truth-teacher-home-tabletop` 明确区分新场景及控制来源。第一台新机器首次启用 RTX 相机时可能需要较长时间编译光追着色器；后续运行约 20 秒完成这一条轨迹。
+
 ### 连续药瓶长任务
 
 药瓶使用仓库内的程序化 USD 资产，包含瓶身、瓶盖、标签、红十字、碰撞体、质量与摩擦参数。连续 episode 在四个阶段分别发送 `open the top drawer`、`pick up the medicine bottle`、`put the medicine bottle into the top drawer` 和 `close the top drawer`。200-step checkpoint 沿用早期日用品四技能小数据训练，没有为药瓶重新训练；本次演示用于验证新资产和新语言提示下的部署迁移。π0.5 每 4 步重规划一次，受限残差权重为 `0.0001`；DLS 状态机负责接触安全和失败恢复。因此这是 **π0.5-assisted closed loop**，不是纯 π0.5 自主成功，仓库不会把混合控制结果误标为纯模型结果。
