@@ -300,8 +300,17 @@ class TidyBenchHomeTablePickEnvCfg(TidyBenchDrawerShowcaseEnvCfg):
         # Keep the visual floor slightly above the default ground plane so
         # its oak finish, rather than the black physics grid, is visible.
         box("oak_floor", (7.0, 7.0, 0.025), (0.0, 0.0, 0.025), (0.70, 0.58, 0.43))
+        # Subtle timber board joints and a woven rug give the floor domestic
+        # scale without reintroducing the original high-contrast physics grid.
+        for index in range(16):
+            y = -2.65 + index * 0.36
+            box(f"floor_board_joint_{index:02d}", (6.8, 0.006, 0.003), (0.0, y, 0.039), (0.54, 0.43, 0.31))
+        box("woven_rug", (1.70, 1.35, 0.006), (-1.25, -1.15, 0.045), (0.38, 0.52, 0.52))
+        box("rug_border_front", (1.58, 0.025, 0.003), (-1.25, -1.76, 0.050), (0.72, 0.69, 0.55))
+        box("rug_border_back", (1.58, 0.025, 0.003), (-1.25, -0.54, 0.050), (0.72, 0.69, 0.55))
         box("cream_back_wall", (7.0, 0.06, 3.1), (0.0, 2.5, 1.55), (0.89, 0.85, 0.76))
         box("warm_side_wall", (0.06, 5.0, 3.1), (2.7, 0.0, 1.55), (0.83, 0.78, 0.69))
+        box("back_wall_baseboard", (7.0, 0.055, 0.11), (0.0, 2.44, 0.065), (0.59, 0.45, 0.32))
         box("window_glass", (1.5, 0.025, 0.9), (-0.85, 2.44, 1.94), (0.60, 0.76, 0.82))
         box("window_sill", (1.7, 0.10, 0.045), (-0.85, 2.37, 1.46), (0.72, 0.52, 0.31))
         box("home_sideboard", (0.9, 0.32, 0.8), (2.13, 1.7, 0.4), (0.50, 0.34, 0.22))
