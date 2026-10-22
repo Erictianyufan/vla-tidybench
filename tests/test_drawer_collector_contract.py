@@ -93,3 +93,4 @@ def test_handle_prompt_router_is_explicit_and_auditable() -> None:
     assert "teacher.phase in (Phase.HANDLE_CLOSE, Phase.DRAWER_PULL)" in text
     assert '"prompt": active_prompt' in text
     assert "policy_prompts.append(active_prompt)" in text
+    assert '"  diagnostic_gripper "' in text

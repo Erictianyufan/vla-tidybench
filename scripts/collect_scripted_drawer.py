@@ -950,6 +950,21 @@ def main() -> int:
                             f"mean_correction_norm={float(np.mean(np.linalg.norm(correction_skill[:, :6], axis=1))):.3f}",
                             flush=True,
                         )
+                    for phase_name in ("HANDLE_CLOSE", "DRAWER_PULL"):
+                        phase_mask = np.asarray(phase_trace) == phase_name
+                        if not np.any(phase_mask):
+                            continue
+                        model_gripper = np.asarray(policy_actions)[phase_mask, 6]
+                        print(
+                            "  diagnostic_gripper "
+                            f"phase={phase_name} steps={int(phase_mask.sum())} "
+                            f"mean={float(np.mean(model_gripper)):.3f} "
+                            f"median={float(np.median(model_gripper)):.3f} "
+                            f"q10={float(np.quantile(model_gripper, 0.1)):.3f} "
+                            f"q90={float(np.quantile(model_gripper, 0.9)):.3f} "
+                            f"close_fraction={float(np.mean(model_gripper < 0)):.3f}",
+                            flush=True,
+                        )
         env.recorder_manager.close()
         if output.exists():
             add_metadata(
