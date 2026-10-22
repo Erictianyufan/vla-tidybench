@@ -83,3 +83,4 @@ def test_handle_phases_have_bounded_failure_timeouts() -> None:
     text = _source(COLLECTOR)
     assert "handle approach did not converge within 180 steps" in text
     assert "handle alignment did not converge within 120 steps" in text
+    assert "base_action = teacher.action()\n                    if teacher.phase is Phase.FAILED:\n                        break" in text

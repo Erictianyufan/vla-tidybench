@@ -783,6 +783,8 @@ def main() -> int:
             with torch.inference_mode():
                 for step in range(args_cli.max_steps):
                     base_action = teacher.action()
+                    if teacher.phase is Phase.FAILED:
+                        break
                     active_skill = skill_for_phase(teacher.phase)
                     proposed = np.zeros(7, dtype=np.float32)
                     if policy_client is not None:
