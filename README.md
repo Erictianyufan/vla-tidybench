@@ -8,7 +8,7 @@ VLA-TidyBench 是一个面向具身智能工程实践的仿真项目：在 Isaac
   <img src="docs/media/home-tabletop-full-pi05-live.gif" alt="家庭木地板桌面场景中 π0.5 主导的开柜、抓取、放入、关柜连续仿真演示" width="960">
 </p>
 
-上图是家庭木地板与实体桌面场景的一条**真实 π0.5 在线推理**成功轨迹：OPEN → PICK → PLACE → CLOSE，共 425 个控制步，技能间没有重置或拼接。[观看 21.25 秒三机位 MP4](docs/media/home-tabletop-full-pi05-live.mp4) · [核验指标](results/metrics/home_tabletop_full_pi05_live.json) · [完整复现规程](docs/home_tabletop_full_pi05.md)。模型提供主动作并独立决定夹爪开合；仿真真值状态机选择阶段，DLS 提供有界运动修正，因此这是 **π0.5-primary、truth-guided DLS-assisted**，不是纯视觉自主策略。
+上图是家庭木地板与实体桌面场景的一条**真实 π0.5 在线推理**成功轨迹：OPEN → PICK → PLACE → CLOSE，共 425 个控制步，技能间没有重置或拼接。[观看 21.25 秒三机位 MP4](docs/media/home-tabletop-full-pi05-live.mp4) · [下载原始 HDF5、视频和指标](https://github.com/Erictianyufan/vla-tidybench/releases/tag/v0.2.0-home-pi05) · [完整复现规程](docs/home_tabletop_full_pi05.md)。模型提供主动作并独立决定夹爪开合；仿真真值状态机选择阶段，DLS 提供有界运动修正，因此这是 **π0.5-primary、truth-guided DLS-assisted**，不是纯视觉自主策略。
 
 ## 项目概览
 
@@ -97,7 +97,7 @@ flowchart LR
 
 ![家庭桌面开柜、抓取、放入、关柜连续三机位演示](docs/media/home-tabletop-full-pi05-live.gif)
 
-[观看原速 MP4](docs/media/home-tabletop-full-pi05-live.mp4) · [核验 JSON](results/metrics/home_tabletop_full_pi05_live.json) · [训练完成记录](results/metrics/home_relative_release_training_completion.json) · [数据集来源](results/metrics/home_relative_release_dataset_provenance.json)
+[观看原速 MP4](docs/media/home-tabletop-full-pi05-live.mp4) · [下载原始轨迹 HDF5](https://github.com/Erictianyufan/vla-tidybench/releases/download/v0.2.0-home-pi05/home-tabletop-full-pi05-live.hdf5) · [核验 JSON](results/metrics/home_tabletop_full_pi05_live.json) · [训练完成记录](results/metrics/home_relative_release_training_completion.json) · [数据集来源](results/metrics/home_relative_release_dataset_provenance.json)
 
 这条 20 FPS、21.25 秒视频来自同一条 425 步 Isaac episode，真实调用 π0.5 服务 108 次。策略每 4 步获取桌面 RGB、腕部 RGB、18D 相对关节状态和当前语言指令；动作块是主要执行动作，DLS 仅对 6D 运动施加范数不超过 `0.20` 的修正。夹爪指令只来自模型，并经“闭合连续 6 步、张开连续 4 步”的时序确认。逐帧审计测得模型运动占比 `78.6%`；物理成功判据同时要求药瓶在抽屉内且抽屉闭合。阶段切换及 DLS 修正仍使用仿真真值，请勿解读成纯视觉端到端自主完成。
 
