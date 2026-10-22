@@ -37,6 +37,11 @@ parser.add_argument("--policy-port", type=int, default=8000)
 parser.add_argument("--policy-residual-weight", type=float, default=0.0001)
 parser.add_argument("--policy-replan-steps", type=int, default=4)
 parser.add_argument(
+    "--route-handle-gripper-prompt",
+    action="store_true",
+    help="use the truth-FSM handle-close/pull phase to route a specific language prompt",
+)
+parser.add_argument(
     "--policy-first", action="store_true", help="execute pi0.5 actions with only a bounded DLS correction"
 )
 parser.add_argument("--dls-max-correction-norm", type=float, default=0.10)
@@ -56,6 +61,8 @@ if args_cli.policy_host and not args_cli.policy_first and not 0.0 < args_cli.pol
     parser.error("--policy-residual-weight must be in (0, 0.05]")
 if args_cli.policy_first and not args_cli.policy_host:
     parser.error("--policy-first requires --policy-host")
+if args_cli.route_handle_gripper_prompt and not args_cli.policy_first:
+    parser.error("--route-handle-gripper-prompt requires --policy-first")
 if args_cli.policy_first and not 0.0 <= args_cli.dls_max_correction_norm <= 0.25:
     parser.error("--dls-max-correction-norm must be in [0, 0.25]")
 if args_cli.home_tabletop:
@@ -119,6 +126,7 @@ PROMPTS = {
 }
 if args_cli.home_tabletop:
     PROMPTS["pick"] = "pick up the medicine bottle from the home table"
+HANDLE_GRIP_PROMPT = "close the gripper on the top drawer handle and pull it open"
 
 
 def skill_for_phase(phase: Phase) -> str:
@@ -670,6 +678,9 @@ def add_metadata(
         data.attrs["scene_variant"] = (
             f"home_tabletop_{args_cli.skill}" if args_cli.home_tabletop else "original_drawer"
         )
+        data.attrs["prompt_router"] = (
+            "truth_fsm_handle_grip" if args_cli.route_handle_gripper_prompt else "skill_only"
+        )
         string_type = h5py.string_dtype(encoding="utf-8")
         payloads = successful_policy_payloads or [{} for _ in successful_phase_traces]
         for demo, phase_trace, payload, hero_frames in zip(
@@ -683,6 +694,7 @@ def add_metadata(
             demo.attrs["skill"] = args_cli.skill
             demo.attrs["language_instruction"] = PROMPTS[args_cli.skill]
             demo.attrs["scene_variant"] = data.attrs["scene_variant"]
+            demo.attrs["prompt_router"] = data.attrs["prompt_router"]
             demo.create_dataset(
                 "teacher_phase",
                 data=np.asarray(phase_trace, dtype=object),
@@ -780,17 +792,25 @@ def main() -> int:
             policy_chunk = np.empty((0, 7), dtype=np.float32)
             policy_chunk_index = 0
             policy_chunk_skill = ""
+            policy_chunk_prompt = ""
             with torch.inference_mode():
                 for step in range(args_cli.max_steps):
                     base_action = teacher.action()
                     if teacher.phase is Phase.FAILED:
                         break
                     active_skill = skill_for_phase(teacher.phase)
+                    active_prompt = (
+                        HANDLE_GRIP_PROMPT
+                        if args_cli.route_handle_gripper_prompt
+                        and teacher.phase in (Phase.HANDLE_CLOSE, Phase.DRAWER_PULL)
+                        else PROMPTS[active_skill]
+                    )
                     proposed = np.zeros(7, dtype=np.float32)
                     if policy_client is not None:
                         if (
                             policy_chunk_index >= min(len(policy_chunk), args_cli.policy_replan_steps)
                             or active_skill != policy_chunk_skill
+                            or active_prompt != policy_chunk_prompt
                         ):
                             robot = env.scene["robot"]
                             q = robot.data.joint_pos.torch[0].detach().cpu().numpy().astype(np.float32)
@@ -815,7 +835,7 @@ def main() -> int:
                                     "observation/image": table,
                                     "observation/wrist_image": wrist,
                                     "observation/state": np.concatenate((q, qd), dtype=np.float32),
-                                    "prompt": PROMPTS[active_skill],
+                                    "prompt": active_prompt,
                                 }
                             )
                             policy_latencies.append((time.perf_counter() - infer_started) * 1000.0)
@@ -829,6 +849,7 @@ def main() -> int:
                                 raise ValueError(f"malformed policy chunk {policy_chunk.shape}")
                             policy_chunk_index = 0
                             policy_chunk_skill = active_skill
+                            policy_chunk_prompt = active_prompt
                         proposed = policy_chunk[policy_chunk_index]
                         policy_chunk_index += 1
                         reference_raw = base_action[0].detach().cpu().numpy().astype(np.float32)
@@ -870,7 +891,7 @@ def main() -> int:
                         correction_actions.append(correction.copy())
                         executed_actions.append(raw.copy())
                         policy_skills.append(active_skill)
-                        policy_prompts.append(PROMPTS[active_skill])
+                        policy_prompts.append(active_prompt)
                     if step % 40 == 0:
                         eef_pos = teacher._eef()[0][0].detach().cpu().tolist()
                         fixed = (

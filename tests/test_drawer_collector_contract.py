@@ -84,3 +84,12 @@ def test_handle_phases_have_bounded_failure_timeouts() -> None:
     assert "handle approach did not converge within 180 steps" in text
     assert "handle alignment did not converge within 120 steps" in text
     assert "base_action = teacher.action()\n                    if teacher.phase is Phase.FAILED:\n                        break" in text
+
+
+def test_handle_prompt_router_is_explicit_and_auditable() -> None:
+    text = _source(COLLECTOR)
+    assert "--route-handle-gripper-prompt" in text
+    assert "truth_fsm_handle_grip" in text
+    assert "teacher.phase in (Phase.HANDLE_CLOSE, Phase.DRAWER_PULL)" in text
+    assert '"prompt": active_prompt' in text
+    assert "policy_prompts.append(active_prompt)" in text
