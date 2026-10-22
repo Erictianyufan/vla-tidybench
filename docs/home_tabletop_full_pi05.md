@@ -1,6 +1,6 @@
 # 家庭桌面完整任务：π0.5 主导控制的录制规程
 
-状态：已取得一条通过动作来源审计和物理成功判据的[π0.5 在线闭环录像](media/home-tabletop-full-pi05-live.mp4)。四阶段 `OPEN → PICK → PLACE → CLOSE` 在同一个 425 步 episode 内完成；3 次尝试中第 3 次成功。早期[脚本教师预览](media/home-tabletop-full-teacher-wood-preview.mp4)继续保留，但不得与本次模型结果混称。
+状态：已取得一条通过动作来源审计和物理成功判据的[π0.5 在线闭环录像](media/home-tabletop-full-pi05-live.mp4)；[GitHub Release](https://github.com/Erictianyufan/vla-tidybench/releases/tag/v0.2.0-home-pi05)提供原始 HDF5、MP4、GIF 和指标 JSON 下载。四阶段 `OPEN → PICK → PLACE → CLOSE` 在同一个 425 步 episode 内完成；3 次尝试中第 3 次成功。早期[脚本教师预览](media/home-tabletop-full-teacher-wood-preview.mp4)继续保留，但不得与本次模型结果混称。
 
 家庭场景使用抬高到木桌面的 Franka／抽屉／药瓶工作空间；地板由仓库内 `assets/home_oak_floor.usda` 与 `assets/home_oak_floor.png` 提供真实木纹，而不是 Isaac 默认黑白网格。旧的 Isaac 4.5 Simple_Room 与 YCB 陈列资产不会在家庭场景加载。木纹是视觉材质，地面物理仍由默认地面承担，不改变策略的动作空间。
 
