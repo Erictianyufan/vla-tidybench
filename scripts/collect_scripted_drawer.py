@@ -117,7 +117,7 @@ PROMPTS = {
     "close": "close the top drawer",
     "full": "put the medicine bottle into the top drawer and close it",
 }
-if args_cli.home_tabletop and args_cli.skill == "pick":
+if args_cli.home_tabletop:
     PROMPTS["pick"] = "pick up the medicine bottle from the home table"
 
 

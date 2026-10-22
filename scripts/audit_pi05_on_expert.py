@@ -20,7 +20,7 @@ from vla_tidybench.policy_bridge.websocket_client import PolicyClient
 
 PROMPTS = {
     "open": "open the top drawer",
-    "pick": "pick up the medicine bottle",
+    "pick": "pick up the medicine bottle from the home table",
     "place": "put the medicine bottle into the top drawer",
     "close": "close the top drawer",
 }

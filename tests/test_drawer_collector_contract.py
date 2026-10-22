@@ -58,6 +58,7 @@ def test_skill_prerequisites_are_part_of_recorded_reset_state() -> None:
 def test_home_tabletop_full_shifts_placement_and_preserves_policy_priority() -> None:
     text = _source(COLLECTOR)
     assert 'args_cli.skill not in ("pick", "full")' in text
+    assert 'if args_cli.home_tabletop:\n    PROMPTS["pick"] = "pick up the medicine bottle from the home table"' in text
     for height in ("0.82", "0.86", "0.88"):
         assert f"self.fixed_target[:, 2] = {height} + self.height_offset" in text
     assert "0.68 + self.height_offset < obj[2] < 0.86 + self.height_offset" in text
