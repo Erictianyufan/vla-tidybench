@@ -1,9 +1,12 @@
 import json
+import runpy
+from pathlib import Path
 
 import pytest
 
-from scripts.package_orbax_release import package
-from scripts.restore_orbax_release import restore
+_SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+package = runpy.run_path(str(_SCRIPTS / "package_orbax_release.py"))["package"]
+restore = runpy.run_path(str(_SCRIPTS / "restore_orbax_release.py"))["restore"]
 
 
 def test_split_checkpoint_round_trip_and_integrity(tmp_path) -> None:
