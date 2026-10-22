@@ -16,7 +16,13 @@ ISAAC_PYTHON="${ISAAC_LAB_VENV:-/home/ubuntu/env_isaaclab}/bin/python"
 RUN_NAME="home_full_pi05_$(date +%Y%m%d_%H%M%S)"
 DATASET="${DATASET:-/home/ubuntu/data/vla-tidybench/eval/${RUN_NAME}.hdf5}"
 VIDEO="${VIDEO:-/home/ubuntu/data/vla-tidybench/videos/${RUN_NAME}.mp4}"
-CORRECTION_LIMIT="${DLS_MAX_CORRECTION_NORM:-0.10}"
+CORRECTION_LIMIT="${DLS_MAX_CORRECTION_NORM:-0.20}"
+CORRECTION_MODE="${DLS_CORRECTION_MODE:-skill_router}"
+GRIPPER_OPEN_CONFIRM_STEPS="${POLICY_GRIPPER_OPEN_CONFIRM_STEPS:-4}"
+PROMPT_ROUTE_ARGS=()
+if [[ "${ROUTE_PLACE_RELEASE_PROMPT:-0}" == "1" ]]; then
+  PROMPT_ROUTE_ARGS+=(--route-place-release-prompt)
+fi
 SERVER_PID=""
 
 if [[ "${POLICY_HOST}" == "127.0.0.1" || "${POLICY_HOST}" == "localhost" ]]; then
@@ -59,9 +65,12 @@ done
 ./scripts/run_isaac.sh scripts/collect_scripted_drawer.py \
   --skill full --home-tabletop --policy-first \
   --policy-host "${POLICY_HOST}" --policy-port "${POLICY_PORT}" \
-  --dls-max-correction-norm "${CORRECTION_LIMIT}" --policy-replan-steps 4 \
-  --num_demos 1 --max_attempts 3 --max_steps 950 --seed 610 \
-  --dataset_file "${DATASET}" --device "cuda:${ISAAC_GPU}" --enable_cameras --viz none
+  --dls-max-correction-norm "${CORRECTION_LIMIT}" --dls-correction-mode "${CORRECTION_MODE}" \
+  --policy-replan-steps 4 --policy-gripper-close-confirm-steps 6 \
+  --policy-gripper-open-confirm-steps "${GRIPPER_OPEN_CONFIRM_STEPS}" \
+  "${PROMPT_ROUTE_ARGS[@]}" \
+  --num_demos 1 --max_attempts 3 --max_steps 850 --seed 610 \
+  --dataset_file "${DATASET}" --device "cuda:${ISAAC_GPU}" --enable_cameras --headless
 
 "${ISAAC_PYTHON}" scripts/validate_home_full_pi05.py "${DATASET}"
 "${ISAAC_PYTHON}" scripts/render_pi05_showcase.py "${DATASET}" "${VIDEO}" --fps 20

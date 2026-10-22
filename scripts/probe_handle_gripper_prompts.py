@@ -13,10 +13,8 @@ from pathlib import Path
 
 import h5py
 import numpy as np
-
 from vla_tidybench.data.isaac_hdf5 import load_episode, sorted_episode_names
 from vla_tidybench.policy_bridge.websocket_client import PolicyClient
-
 
 PROMPTS = (
     "open the top drawer",
@@ -65,9 +63,7 @@ def main() -> None:
                 "samples": len(selected),
                 "model_close_fraction": round(float(np.mean(model[:, 6] < 0)), 3),
                 "expert_close_fraction": round(float(np.mean(expert[:, 6] < 0)), 3),
-                "mean_arm_action_error": round(
-                    float(np.mean(np.linalg.norm(model[:, :6] - expert[:, :6], axis=1))), 4
-                ),
+                "mean_arm_action_error": round(float(np.mean(np.linalg.norm(model[:, :6] - expert[:, :6], axis=1))), 4),
             }
     print(json.dumps(results, indent=2, ensure_ascii=False))
 

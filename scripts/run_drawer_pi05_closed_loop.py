@@ -48,6 +48,7 @@ import gymnasium as gym  # noqa: E402
 import h5py  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
+from vla_tidybench.data.isaac_hdf5 import relative_deployable_state  # noqa: E402
 from vla_tidybench.isaac import TidyBenchDrawerEnvCfg, TidyBenchDrawerShowcaseEnvCfg  # noqa: E402
 from vla_tidybench.policy_bridge.action_adapter import ActionAdapter  # noqa: E402
 from vla_tidybench.policy_bridge.safety_guard import SafetyGuard  # noqa: E402
@@ -64,11 +65,16 @@ def _numpy(value):
 
 def _obs(env):
     data = env.scene
-    q = _numpy(data["robot"].data.joint_pos)[0].astype(np.float32)
-    qd = _numpy(data["robot"].data.joint_vel)[0].astype(np.float32)
+    robot = data["robot"].data
+    state = relative_deployable_state(
+        _numpy(robot.joint_pos)[0],
+        _numpy(robot.joint_vel)[0],
+        _numpy(robot.default_joint_pos)[0],
+        _numpy(robot.default_joint_vel)[0],
+    )
     table = _numpy(data["table_cam"].data.output["rgb"])[0, ..., :3].astype(np.uint8)
     wrist = _numpy(data["wrist_cam"].data.output["rgb"])[0, ..., :3].astype(np.uint8)
-    return table, wrist, np.concatenate((q, qd), dtype=np.float32)
+    return table, wrist, state
 
 
 def main() -> int:

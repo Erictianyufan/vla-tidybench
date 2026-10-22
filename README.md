@@ -1,14 +1,14 @@
 # VLA-TidyBench
 
-VLA-TidyBench 是一个面向具身智能工程实践的仿真项目：在 Isaac Sim / Isaac Lab 中使用 Franka Panda 完成抽屉整理任务，并贯通自动示范采集、LeRobot 数据转换、OpenPI π0.5 LoRA、策略服务、闭环部署、残差强化学习和多机位演示。最终落地场景是家庭药品收纳：机器人打开抽屉，拾取掉落的药瓶，将其放入抽屉并关闭抽屉。
+VLA-TidyBench 是一个面向具身智能工程实践的仿真项目：在 Isaac Sim / Isaac Lab 中使用 Franka Panda 完成抽屉整理任务，并贯通自动示范采集、LeRobot 数据转换、OpenPI π0.5 微调、策略服务、闭环部署、残差强化学习和多机位演示。最终落地场景是家庭药品收纳：机器人打开抽屉，拾取桌上的药瓶，将其放入抽屉并关闭抽屉。
 
 目标任务：**Open the drawer → pick an object → place it in the drawer → close the drawer.**
 
 <p align="center">
-  <img src="docs/media/pi05-continuous-medicine-demo.gif" alt="药瓶 OPEN、PICK、PLACE、CLOSE 连续长任务三机位演示" width="960">
+  <img src="docs/media/home-tabletop-full-pi05-live.gif" alt="家庭木地板桌面场景中 π0.5 主导的开柜、抓取、放入、关柜连续仿真演示" width="960">
 </p>
 
-上图是一个无重置、无技能间剪切的连续成功 episode：OPEN → PICK 药瓶 → PLACE → CLOSE，共 438 个控制步。三机位完整视频见[连续药瓶长任务 MP4](docs/media/pi05-continuous-medicine-demo.mp4)。四个原子技能的 2×2 展示、完整项目成片和强化学习对照见文末演示区。
+上图是家庭木地板与实体桌面场景的一条**真实 π0.5 在线推理**成功轨迹：OPEN → PICK → PLACE → CLOSE，共 425 个控制步，技能间没有重置或拼接。[观看 21.25 秒三机位 MP4](docs/media/home-tabletop-full-pi05-live.mp4) · [核验指标](results/metrics/home_tabletop_full_pi05_live.json) · [完整复现规程](docs/home_tabletop_full_pi05.md)。模型提供主动作并独立决定夹爪开合；仿真真值状态机选择阶段，DLS 提供有界运动修正，因此这是 **π0.5-primary、truth-guided DLS-assisted**，不是纯视觉自主策略。
 
 ## 项目概览
 
@@ -62,10 +62,11 @@ flowchart LR
 | π0.5 + DLS contact recovery | 94 步打开至 `0.303 m`，成功阈值 `0.30 m`，平均推理约 101 ms |
 | 四技能最小训练 | 4 个 episode、684 帧、200 steps；单一语言条件 checkpoint |
 | 四技能展示 | OPEN / PICK / PLACE / CLOSE 四段成功轨迹 |
-| 连续药瓶长任务 | 单 episode、438 步、技能间 0 次 reset；平均推理 `103.09 ms` |
+| 家庭桌面 π0.5 主导完整任务 | 单条成功 episode、425 步、108 次在线推理、21.25 s；模型运动占比 `78.6%`，平均推理 `126.34 ms`；DLS 修正上限 `0.20` |
+| 早期连续药瓶长任务 | 单 episode、438 步、技能间 0 次 reset；平均推理 `103.09 ms`，但控制以 DLS 为主 |
 | PICK Residual SAC | 200 steps；零残差基线 0/1，deterministic 评测 3/3，67 步抬升罐头至 `0.1201 m` |
 
-顶部连续 GIF 使用同一 Isaac episode 中的在线 π0.5 action proposal 与 DLS 安全恢复控制，记录每步语言、模型动作、教师阶段和最终执行动作。它验证了模型服务、动态技能提示、Isaac 闭环、物理抓取和多机位录制能够在一条长轨迹中贯通。
+顶部 GIF 来自新家庭场景中的同一条在线闭环轨迹。核验器逐帧检查模型动作、DLS 修正、实际执行动作、阶段、提示和三路相机对齐；最终物理判据要求药瓶在抽屉内、抽屉闭合。旧的 DLS 主导演示仍保留在下方作历史对照，不与新结果混称。
 
 ### 家庭桌面抓取：新场景复现
 
@@ -92,15 +93,19 @@ flowchart LR
 
 记录文件的 `scene_variant=home_tabletop_pick` 和 `policy=scripted-truth-teacher-home-tabletop` 明确区分新场景及控制来源。第一台新机器首次启用 RTX 相机时可能需要较长时间编译光追着色器；后续运行约 20 秒完成这一条轨迹。
 
-### 家庭木地板完整流程：物理场景预览
+### 家庭木地板完整流程：π0.5 在线闭环成功
 
-![家庭木地板桌面四阶段连续预览；脚本教师控制](docs/media/home-tabletop-full-teacher-wood-preview.gif)
+![家庭桌面开柜、抓取、放入、关柜连续三机位演示](docs/media/home-tabletop-full-pi05-live.gif)
 
-[观看 20 FPS、21.9 秒三机位完整 MP4](docs/media/home-tabletop-full-teacher-wood-preview.mp4)
+[观看原速 MP4](docs/media/home-tabletop-full-pi05-live.mp4) · [核验 JSON](results/metrics/home_tabletop_full_pi05_live.json) · [训练完成记录](results/metrics/home_relative_release_training_completion.json) · [数据集来源](results/metrics/home_relative_release_dataset_provenance.json)
 
-新录像在同一条 Isaac episode 内完成开抽屉、抓取药瓶、放入抽屉和关抽屉，共 438 个控制步；机器人与收纳柜位于实体桌面，地板采用木纹材质，不再出现黑白网格。结束时药瓶保持在抽屉内、抽屉闭合。**这条录像只验证新家庭场景和录制链路，控制源是脚本教师；画面已明确标注，不是 π0.5 在线推理成果。**
+这条 20 FPS、21.25 秒视频来自同一条 425 步 Isaac episode，真实调用 π0.5 服务 108 次。策略每 4 步获取桌面 RGB、腕部 RGB、18D 相对关节状态和当前语言指令；动作块是主要执行动作，DLS 仅对 6D 运动施加范数不超过 `0.20` 的修正。夹爪指令只来自模型，并经“闭合连续 6 步、张开连续 4 步”的时序确认。逐帧审计测得模型运动占比 `78.6%`；物理成功判据同时要求药瓶在抽屉内且抽屉闭合。阶段切换及 DLS 修正仍使用仿真真值，请勿解读成纯视觉端到端自主完成。
 
-家庭桌面 `OPEN → PICK → PLACE → CLOSE` 的 π0.5 主导控制与录制代码列在[完整任务运行规程](docs/home_tabletop_full_pi05.md)。第三阶段完整模型权重已在[独立权重仓库](https://github.com/Erictianyufan/vla-tidybench-pi05-weights)发布，闭环评测尚未通过；在新轨迹通过动作来源及物理放置核验之前，本页不会把上述预览称为 π0.5 完整任务成功。
+| 开柜 | 抓取 | 放入 | 关柜 |
+| :---: | :---: | :---: | :---: |
+| ![抽屉打开](docs/media/home-tabletop-full-pi05-open.png) | ![夹爪抓取药瓶](docs/media/home-tabletop-full-pi05-pick.png) | ![药瓶移动到抽屉](docs/media/home-tabletop-full-pi05-place.png) | ![抽屉关闭并显示成功](docs/media/home-tabletop-full-pi05-close.png) |
+
+早期[家庭木地板脚本教师预览](docs/media/home-tabletop-full-teacher-wood-preview.mp4)只用于验证场景与相机，并非本次模型结果；更早的[厨房药瓶长任务视频](docs/media/pi05-continuous-medicine-demo.mp4)以 DLS 为主。完整复现步骤、验收门槛及来源限制见[家庭桌面任务规程](docs/home_tabletop_full_pi05.md)。
 
 ### 连续药瓶长任务
 

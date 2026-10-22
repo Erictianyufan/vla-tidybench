@@ -36,15 +36,36 @@ parser.add_argument("--policy-host", help="query a live pi0.5 server and compose
 parser.add_argument("--policy-port", type=int, default=8000)
 parser.add_argument("--policy-residual-weight", type=float, default=0.0001)
 parser.add_argument("--policy-replan-steps", type=int, default=4)
+parser.add_argument("--policy-gripper-close-confirm-steps", type=int, default=1)
+parser.add_argument("--policy-gripper-open-confirm-steps", type=int, default=1)
+parser.add_argument(
+    "--policy-ensemble-samples",
+    type=int,
+    default=1,
+    help="average independent pi0.5 action chunks at each replan; all samples use the same live observation",
+)
+parser.add_argument(
+    "--dagger-dataset-file",
+    type=Path,
+    help="save failed on-policy observations with truth-teacher labels for training only",
+)
 parser.add_argument(
     "--route-handle-gripper-prompt",
     action="store_true",
     help="use the truth-FSM handle-close/pull phase to route a specific language prompt",
 )
 parser.add_argument(
+    "--route-place-release-prompt",
+    action="store_true",
+    help="use the truth-FSM PLACE_RELEASE phase to ask pi0.5 explicitly to release the bottle",
+)
+parser.add_argument(
     "--policy-first", action="store_true", help="execute pi0.5 actions with only a bounded DLS correction"
 )
 parser.add_argument("--dls-max-correction-norm", type=float, default=0.10)
+parser.add_argument(
+    "--dls-correction-mode", choices=("isotropic", "translation_first", "skill_router"), default="isotropic"
+)
 parser.add_argument(
     "--actions-only",
     action="store_true",
@@ -61,10 +82,24 @@ if args_cli.policy_host and not args_cli.policy_first and not 0.0 < args_cli.pol
     parser.error("--policy-residual-weight must be in (0, 0.05]")
 if args_cli.policy_first and not args_cli.policy_host:
     parser.error("--policy-first requires --policy-host")
+if args_cli.dagger_dataset_file and not args_cli.policy_first:
+    parser.error("--dagger-dataset-file requires --policy-first")
+if args_cli.dagger_dataset_file and args_cli.dagger_dataset_file.exists():
+    parser.error("dagger dataset already exists; refusing to overwrite it")
 if args_cli.route_handle_gripper_prompt and not args_cli.policy_first:
     parser.error("--route-handle-gripper-prompt requires --policy-first")
+if args_cli.route_place_release_prompt and not args_cli.policy_first:
+    parser.error("--route-place-release-prompt requires --policy-first")
 if args_cli.policy_first and not 0.0 <= args_cli.dls_max_correction_norm <= 0.25:
     parser.error("--dls-max-correction-norm must be in [0, 0.25]")
+if args_cli.policy_ensemble_samples < 1:
+    parser.error("--policy-ensemble-samples must be positive")
+if min(args_cli.policy_gripper_close_confirm_steps, args_cli.policy_gripper_open_confirm_steps) < 1:
+    parser.error("gripper confirmation steps must be positive")
+if not args_cli.policy_first and (
+    args_cli.policy_gripper_close_confirm_steps != 1 or args_cli.policy_gripper_open_confirm_steps != 1
+):
+    parser.error("model gripper confirmation requires --policy-first")
 if args_cli.home_tabletop:
     if args_cli.skill not in ("pick", "full"):
         parser.error("--home-tabletop supports --skill pick or full")
@@ -91,6 +126,7 @@ import h5py  # noqa: E402
 
 _startup_mark("h5py")
 import numpy as np  # noqa: E402
+from vla_tidybench.data.isaac_hdf5 import relative_deployable_state  # noqa: E402
 
 _startup_mark("numpy")
 import torch  # noqa: E402
@@ -110,7 +146,7 @@ from vla_tidybench.isaac import (  # noqa: E402
     TidyBenchHomeTablePickEnvCfg,
 )
 from vla_tidybench.policy_bridge.action_adapter import ActionAdapter  # noqa: E402
-from vla_tidybench.policy_bridge.policy_first import compose_policy_first  # noqa: E402
+from vla_tidybench.policy_bridge.policy_first import ModelGripperDebouncer, compose_policy_first  # noqa: E402
 from vla_tidybench.policy_bridge.websocket_client import PolicyClient  # noqa: E402
 
 _startup_mark("drawer_cfg")
@@ -127,6 +163,7 @@ PROMPTS = {
 if args_cli.home_tabletop:
     PROMPTS["pick"] = "pick up the medicine bottle from the home table"
 HANDLE_GRIP_PROMPT = "close the gripper on the top drawer handle and pull it open"
+PLACE_RELEASE_PROMPT = "open the gripper and release the medicine bottle into the top drawer"
 
 
 def skill_for_phase(phase: Phase) -> str:
@@ -307,8 +344,14 @@ class DrawerTeacher:
                 return self._hold(1.0)
             target = handle.clone()
             target[:, 0] -= 0.008
-            action = self._pose_action(target, self.handle_quat, 1.0, pos_threshold=0.008, rot_threshold=0.10)
-            if self.stable_steps >= 4:
+            action = self._pose_action(
+                target,
+                self.handle_quat,
+                1.0,
+                pos_threshold=0.004 if args_cli.policy_first else 0.008,
+                rot_threshold=0.06 if args_cli.policy_first else 0.10,
+            )
+            if self.stable_steps >= (6 if args_cli.policy_first else 4):
                 self._set_phase(Phase.HANDLE_CLOSE)
             return action
 
@@ -337,28 +380,51 @@ class DrawerTeacher:
             target = handle.clone()
             target[:, 0] -= 0.06
             action = self._pose_action(target, self.handle_quat, 1.0, pos_threshold=0.018)
-            if self.stable_steps >= 3:
+            clearance = float(torch.linalg.vector_norm(self._eef()[0] - handle, dim=1)[0])
+            # The target itself is 6 cm behind the moving handle. Requiring
+            # 8 cm clearance made this phase unreachable at a 0.40 m opening.
+            if self.stable_steps >= 3 or (args_cli.policy_first and self.phase_steps >= 12 and clearance >= 0.05):
                 self._set_phase(self._after_open())
             return action
 
         if self.phase is Phase.PICK_ABOVE:
+            if args_cli.policy_first and self.phase_steps > 200:
+                self.last_reason = "pick approach did not converge within 200 steps"
+                self._set_phase(Phase.FAILED)
+                return self._hold(1.0)
             target = obj.clone()
             target[:, :2] += torch.tensor(self.pick_jitter, dtype=torch.float32, device=self.device)
             target[:, 2] += 0.14
-            action = self._pose_action(target, self.down_quat, 1.0, pos_threshold=0.014)
-            if self.stable_steps >= 4:
+            action = self._pose_action(
+                target,
+                self.down_quat,
+                1.0,
+                pos_threshold=0.020 if args_cli.policy_first else 0.014,
+                rot_threshold=0.20 if args_cli.policy_first else 0.15,
+            )
+            if self.stable_steps >= (3 if args_cli.policy_first else 4):
                 self._set_phase(Phase.PICK_DESCEND)
             return action
 
         if self.phase is Phase.PICK_DESCEND:
+            if args_cli.policy_first and self.phase_steps > 200:
+                self.last_reason = "pick descent did not converge within 200 steps"
+                self._set_phase(Phase.FAILED)
+                return self._hold(1.0)
             target = obj.clone()
             target[:, :2] += torch.tensor(self.pick_jitter, dtype=torch.float32, device=self.device)
             # Grasp the upper body of the medicine bottle. Descending to the
             # old can-center target makes the Franka palm hit the child-proof
             # cap and slide sideways before the fingers close.
             target[:, 2] += 0.055
-            action = self._pose_action(target, self.down_quat, 1.0, pos_threshold=0.018)
-            if self.stable_steps >= 4:
+            action = self._pose_action(
+                target,
+                self.down_quat,
+                1.0,
+                pos_threshold=0.022 if args_cli.policy_first else 0.018,
+                rot_threshold=0.20 if args_cli.policy_first else 0.15,
+            )
+            if self.stable_steps >= (3 if args_cli.policy_first else 4):
                 self._set_phase(Phase.PICK_CLOSE)
             return action
 
@@ -576,9 +642,7 @@ class DrawerTeacher:
                 self.drawer_hold_target = max(self._drawer_pos(), 0.36)
                 cabinet.write_joint_stiffness_to_sim(10000.0, joint_ids=[self.drawer_joint_idx])
                 cabinet.write_joint_damping_to_sim(500.0, joint_ids=[self.drawer_joint_idx])
-            target = torch.tensor(
-                [[self.drawer_hold_target]], dtype=torch.float32, device=self.device
-            )
+            target = torch.tensor([[self.drawer_hold_target]], dtype=torch.float32, device=self.device)
             cabinet.set_joint_position_target(target, joint_ids=[self.drawer_joint_idx])
         elif self.drawer_hold_target is not None and self.phase.name.startswith("CLOSE_"):
             cabinet.write_joint_stiffness_to_sim(0.0, joint_ids=[self.drawer_joint_idx])
@@ -616,7 +680,9 @@ def make_cfg() -> TidyBenchDrawerEnvCfg:
     cfg = (
         TidyBenchHomeTablePickEnvCfg()
         if args_cli.home_tabletop
-        else TidyBenchDrawerShowcaseEnvCfg() if args_cli.showcase else TidyBenchDrawerEnvCfg()
+        else TidyBenchDrawerShowcaseEnvCfg()
+        if args_cli.showcase
+        else TidyBenchDrawerEnvCfg()
     )
     cfg.sim.device = args_cli.device
     if args_cli.actions_only:
@@ -675,25 +741,28 @@ def add_metadata(
         data.attrs["attempts"] = attempts
         data.attrs["successful_episodes"] = successes
         data.attrs["seed"] = args_cli.seed
-        data.attrs["scene_variant"] = (
-            f"home_tabletop_{args_cli.skill}" if args_cli.home_tabletop else "original_drawer"
-        )
-        data.attrs["prompt_router"] = (
-            "truth_fsm_handle_grip" if args_cli.route_handle_gripper_prompt else "skill_only"
-        )
+        data.attrs["scene_variant"] = f"home_tabletop_{args_cli.skill}" if args_cli.home_tabletop else "original_drawer"
+        prompt_routes = []
+        if args_cli.route_handle_gripper_prompt:
+            prompt_routes.append("truth_fsm_handle_grip")
+        if args_cli.route_place_release_prompt:
+            prompt_routes.append("truth_fsm_place_release")
+        data.attrs["prompt_router"] = "+".join(prompt_routes) or "skill_only"
         string_type = h5py.string_dtype(encoding="utf-8")
         payloads = successful_policy_payloads or [{} for _ in successful_phase_traces]
-        for demo, phase_trace, payload, hero_frames in zip(
-            data.values(), successful_phase_traces, payloads, successful_hero_frames, strict=True
+        episode_names = sorted(data.keys(), key=lambda name: int(name.removeprefix("demo_")))
+        for episode_name, phase_trace, payload, hero_frames in zip(
+            episode_names, successful_phase_traces, payloads, successful_hero_frames, strict=True
         ):
+            demo = data[episode_name]
             demo.attrs["source"] = (
-                "pi0.5_policy_with_bounded_truth_guided_dls"
-                if args_cli.policy_first else "scripted_truth_teacher"
+                "pi0.5_policy_with_bounded_truth_guided_dls" if args_cli.policy_first else "scripted_truth_teacher"
             )
             demo.attrs["teacher_version"] = TEACHER_VERSION
             demo.attrs["skill"] = args_cli.skill
             demo.attrs["language_instruction"] = PROMPTS[args_cli.skill]
             demo.attrs["scene_variant"] = data.attrs["scene_variant"]
+            demo.attrs["state_convention"] = "joint_pos_rel_joint_vel_rel"
             demo.attrs["prompt_router"] = data.attrs["prompt_router"]
             demo.create_dataset(
                 "teacher_phase",
@@ -701,23 +770,32 @@ def add_metadata(
                 dtype=string_type,
             )
             if payload:
+                policy_name = str(payload["policy_name"])
                 demo.attrs["policy"] = (
-                    "pi0.5-four-skill-lora-primary+bounded-dls"
-                    if args_cli.policy_first else "pi0.5-four-skill-lora+dls-live-recovery"
+                    f"{policy_name}-primary+bounded-dls"
+                    if args_cli.policy_first
+                    else f"{policy_name}+dls-live-recovery"
                 )
+                demo.attrs["policy_checkpoint_sha256"] = str(payload["checkpoint_sha256"])
                 demo.attrs["control_mode"] = "policy_first" if args_cli.policy_first else "teacher_first"
                 if args_cli.policy_first:
                     demo.attrs["dls_max_correction_norm"] = args_cli.dls_max_correction_norm
+                    demo.attrs["dls_correction_mode"] = args_cli.dls_correction_mode
+                    demo.attrs["policy_gripper_close_confirm_steps"] = args_cli.policy_gripper_close_confirm_steps
+                    demo.attrs["policy_gripper_open_confirm_steps"] = args_cli.policy_gripper_open_confirm_steps
                 else:
                     demo.attrs["policy_residual_weight"] = args_cli.policy_residual_weight
                 demo.attrs["mean_infer_ms"] = float(payload["mean_infer_ms"])
                 demo.attrs["inference_calls"] = int(payload["inference_calls"])
+                demo.attrs["policy_ensemble_samples"] = int(payload["ensemble_samples"])
                 demo.create_dataset("hero_cam", data=payload["hero_cam"], compression="gzip")
-                demo.create_dataset(
-                    "policy_actions", data=payload["policy_actions"], compression="gzip"
-                )
+                demo.create_dataset("policy_actions", data=payload["policy_actions"], compression="gzip")
                 for name in (
-                    "policy_raw_actions", "dls_reference_actions", "correction_actions", "executed_actions"
+                    "policy_model_raw_actions",
+                    "policy_raw_actions",
+                    "dls_reference_actions",
+                    "correction_actions",
+                    "executed_actions",
                 ):
                     demo.create_dataset(name, data=payload[name], compression="gzip")
                 demo.create_dataset(
@@ -739,19 +817,78 @@ def add_metadata(
                 demo.create_dataset("hero_cam", data=hero_frames, compression="gzip")
 
 
+def save_dagger_failure(
+    path: Path,
+    *,
+    table_images: list[np.ndarray],
+    wrist_images: list[np.ndarray],
+    joint_positions: list[np.ndarray],
+    joint_velocities: list[np.ndarray],
+    teacher_actions: list[np.ndarray],
+    model_raw_actions: list[np.ndarray],
+    executed_actions: list[np.ndarray],
+    correction_actions: list[np.ndarray],
+    phases: list[str],
+    prompts: list[str],
+    checkpoint_sha256: str,
+    reason: str,
+) -> None:
+    """Record failed on-policy states with teacher labels, never as success."""
+
+    if not teacher_actions:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with h5py.File(path, "a") as recording:
+        recording.attrs["format_version"] = 1
+        recording.attrs["training_only"] = True
+        data = recording.require_group("data")
+        episode = data.create_group(f"demo_{len(data)}")
+        episode.attrs["success"] = False
+        episode.attrs["source"] = "on_policy_truth_teacher_labeled_failure"
+        episode.attrs["label_source"] = "truth_guided_teacher"
+        episode.attrs["policy_checkpoint_sha256"] = checkpoint_sha256
+        episode.attrs["failure_reason"] = reason
+        episode.attrs["state_convention"] = "joint_pos_rel_joint_vel_rel"
+        episode.create_dataset("actions", data=np.asarray(teacher_actions, dtype=np.float32), compression="gzip")
+        episode.create_dataset(
+            "model_raw_actions", data=np.asarray(model_raw_actions, dtype=np.float32), compression="gzip"
+        )
+        episode.create_dataset(
+            "executed_actions", data=np.asarray(executed_actions, dtype=np.float32), compression="gzip"
+        )
+        episode.create_dataset(
+            "correction_actions", data=np.asarray(correction_actions, dtype=np.float32), compression="gzip"
+        )
+        observations = episode.create_group("obs")
+        for key, values in (
+            ("table_cam", table_images),
+            ("wrist_cam", wrist_images),
+            ("joint_pos", joint_positions),
+            ("joint_vel", joint_velocities),
+        ):
+            observations.create_dataset(key, data=np.asarray(values), compression="gzip")
+        text_type = h5py.string_dtype(encoding="utf-8")
+        episode.create_dataset("teacher_phase", data=np.asarray(phases, dtype=object), dtype=text_type)
+        episode.create_dataset("policy_prompts", data=np.asarray(prompts, dtype=object), dtype=text_type)
+
+
 def main() -> int:
     faulthandler.cancel_dump_traceback_later()
     output = args_cli.dataset_file.resolve()
     env = gym.make("Isaac-Open-Drawer-Franka-IK-Rel-v0", cfg=make_cfg()).unwrapped
-    teacher = DrawerTeacher(
-        env, args_cli.skill, args_cli.seed, height_offset=0.75 if args_cli.home_tabletop else 0.0
-    )
+    teacher = DrawerTeacher(env, args_cli.skill, args_cli.seed, height_offset=0.75 if args_cli.home_tabletop else 0.0)
     adapter = ActionAdapter()
     policy_client = (
-        PolicyClient(args_cli.policy_host, args_cli.policy_port, timeout_s=120.0)
-        if args_cli.policy_host
-        else None
+        PolicyClient(args_cli.policy_host, args_cli.policy_port, timeout_s=120.0) if args_cli.policy_host else None
     )
+    policy_metadata = policy_client.metadata if policy_client is not None else {}
+    if policy_client is not None:
+        policy_name = str(policy_metadata.get("policy", ""))
+        checkpoint_sha256 = str(policy_metadata.get("checkpoint_sha256", ""))
+        if not policy_name.startswith("pi0.5-drawer-"):
+            raise ValueError(f"unexpected policy service: {policy_name!r}")
+        if len(checkpoint_sha256) != 64 or any(char not in "0123456789abcdef" for char in checkpoint_sha256):
+            raise ValueError("policy service did not provide a valid checkpoint SHA-256")
     attempts = 0
     successes = 0
     successful_phase_traces: list[list[str]] = []
@@ -782,13 +919,23 @@ def main() -> int:
             phase_trace: list[str] = []
             hero_frames: list[np.ndarray] = []
             policy_actions: list[np.ndarray] = []
+            policy_model_raw_actions: list[np.ndarray] = []
             policy_raw_actions: list[np.ndarray] = []
+            gripper_debouncer = ModelGripperDebouncer(
+                close_after=args_cli.policy_gripper_close_confirm_steps,
+                open_after=args_cli.policy_gripper_open_confirm_steps,
+            )
             dls_reference_actions: list[np.ndarray] = []
             correction_actions: list[np.ndarray] = []
             executed_actions: list[np.ndarray] = []
             policy_skills: list[str] = []
             policy_prompts: list[str] = []
             policy_latencies: list[float] = []
+            dagger_table_images: list[np.ndarray] = []
+            dagger_wrist_images: list[np.ndarray] = []
+            dagger_joint_positions: list[np.ndarray] = []
+            dagger_joint_velocities: list[np.ndarray] = []
+            dagger_teacher_actions: list[np.ndarray] = []
             policy_chunk = np.empty((0, 7), dtype=np.float32)
             policy_chunk_index = 0
             policy_chunk_skill = ""
@@ -800,7 +947,10 @@ def main() -> int:
                         break
                     active_skill = skill_for_phase(teacher.phase)
                     active_prompt = (
-                        HANDLE_GRIP_PROMPT
+                        PLACE_RELEASE_PROMPT
+                        if args_cli.route_place_release_prompt
+                        and teacher.phase in (Phase.PLACE_RELEASE, Phase.PLACE_RETREAT)
+                        else HANDLE_GRIP_PROMPT
                         if args_cli.route_handle_gripper_prompt
                         and teacher.phase in (Phase.HANDLE_CLOSE, Phase.DRAWER_PULL)
                         else PROMPTS[active_skill]
@@ -813,52 +963,73 @@ def main() -> int:
                             or active_prompt != policy_chunk_prompt
                         ):
                             robot = env.scene["robot"]
-                            q = robot.data.joint_pos.torch[0].detach().cpu().numpy().astype(np.float32)
-                            qd = robot.data.joint_vel.torch[0].detach().cpu().numpy().astype(np.float32)
+                            state = relative_deployable_state(
+                                robot.data.joint_pos.torch[0].detach().cpu().numpy(),
+                                robot.data.joint_vel.torch[0].detach().cpu().numpy(),
+                                robot.data.default_joint_pos.torch[0].detach().cpu().numpy(),
+                                robot.data.default_joint_vel.torch[0].detach().cpu().numpy(),
+                            )
                             table = (
-                                env.scene["table_cam"].data.output["rgb"].torch[0, ..., :3]
+                                env.scene["table_cam"]
+                                .data.output["rgb"]
+                                .torch[0, ..., :3]
                                 .detach()
                                 .cpu()
                                 .numpy()
                                 .astype(np.uint8)
                             )
                             wrist = (
-                                env.scene["wrist_cam"].data.output["rgb"].torch[0, ..., :3]
+                                env.scene["wrist_cam"]
+                                .data.output["rgb"]
+                                .torch[0, ..., :3]
                                 .detach()
                                 .cpu()
                                 .numpy()
                                 .astype(np.uint8)
                             )
-                            infer_started = time.perf_counter()
-                            response = policy_client.infer(
-                                {
-                                    "observation/image": table,
-                                    "observation/wrist_image": wrist,
-                                    "observation/state": np.concatenate((q, qd), dtype=np.float32),
-                                    "prompt": active_prompt,
-                                }
-                            )
-                            policy_latencies.append((time.perf_counter() - infer_started) * 1000.0)
-                            policy_chunk = np.asarray(response["actions"], dtype=np.float32)
-                            if (
-                                policy_chunk.ndim != 2
-                                or policy_chunk.shape[1] != 7
-                                or len(policy_chunk) == 0
-                                or not np.isfinite(policy_chunk).all()
-                            ):
-                                raise ValueError(f"malformed policy chunk {policy_chunk.shape}")
+                            observation = {
+                                "observation/image": table,
+                                "observation/wrist_image": wrist,
+                                "observation/state": state,
+                                "prompt": active_prompt,
+                            }
+                            chunks = []
+                            for _ in range(args_cli.policy_ensemble_samples):
+                                infer_started = time.perf_counter()
+                                response = policy_client.infer(observation)
+                                policy_latencies.append((time.perf_counter() - infer_started) * 1000.0)
+                                candidate = np.asarray(response["actions"], dtype=np.float32)
+                                if (
+                                    candidate.ndim != 2
+                                    or candidate.shape[1] != 7
+                                    or len(candidate) == 0
+                                    or not np.isfinite(candidate).all()
+                                ):
+                                    raise ValueError(f"malformed policy chunk {candidate.shape}")
+                                if chunks and candidate.shape != chunks[0].shape:
+                                    raise ValueError("ensemble action chunks differ in shape")
+                                chunks.append(candidate)
+                            policy_chunk = np.mean(chunks, axis=0, dtype=np.float32)
                             policy_chunk_index = 0
                             policy_chunk_skill = active_skill
                             policy_chunk_prompt = active_prompt
                         proposed = policy_chunk[policy_chunk_index]
                         policy_chunk_index += 1
                         reference_raw = base_action[0].detach().cpu().numpy().astype(np.float32)
-                        proposed_raw = adapter.to_isaac(proposed)
+                        proposed_model_raw = adapter.to_isaac(proposed)
+                        proposed_raw = proposed_model_raw.copy()
                         if args_cli.policy_first:
+                            proposed_raw[6] = gripper_debouncer.update(float(proposed_model_raw[6]))
+                            correction_mode = (
+                                ("translation_first" if active_skill in ("pick", "place") else "isotropic")
+                                if args_cli.dls_correction_mode == "skill_router"
+                                else args_cli.dls_correction_mode
+                            )
                             composed = compose_policy_first(
                                 proposed_raw,
                                 reference_raw,
                                 max_correction_norm=args_cli.dls_max_correction_norm,
+                                correction_mode=correction_mode,
                             )
                             raw = composed.executed_raw
                             correction = composed.correction_raw
@@ -872,13 +1043,39 @@ def main() -> int:
                             correction = raw - reference_raw
                             raw[6] = reference_raw[6]
                         action = torch.as_tensor(raw[None], dtype=torch.float32, device=env.device)
+                        if args_cli.dagger_dataset_file:
+                            robot = env.scene["robot"]
+                            dagger_state = relative_deployable_state(
+                                robot.data.joint_pos.torch[0].detach().cpu().numpy(),
+                                robot.data.joint_vel.torch[0].detach().cpu().numpy(),
+                                robot.data.default_joint_pos.torch[0].detach().cpu().numpy(),
+                                robot.data.default_joint_vel.torch[0].detach().cpu().numpy(),
+                            )
+                            dagger_joint_positions.append(dagger_state[:9].copy())
+                            dagger_joint_velocities.append(dagger_state[9:].copy())
+                            for camera_name, destination in (
+                                ("table_cam", dagger_table_images),
+                                ("wrist_cam", dagger_wrist_images),
+                            ):
+                                destination.append(
+                                    env.scene[camera_name]
+                                    .data.output["rgb"]
+                                    .torch[0, ..., :3]
+                                    .detach()
+                                    .cpu()
+                                    .numpy()
+                                    .astype(np.uint8)
+                                )
+                            dagger_teacher_actions.append(reference_raw.copy())
                     else:
                         action = base_action
                     phase_trace.append(teacher.phase.name)
                     env.step(action)
                     if args_cli.showcase:
                         hero_frames.append(
-                            env.scene["hero_cam"].data.output["rgb"].torch[0, ..., :3]
+                            env.scene["hero_cam"]
+                            .data.output["rgb"]
+                            .torch[0, ..., :3]
                             .detach()
                             .cpu()
                             .numpy()
@@ -886,6 +1083,7 @@ def main() -> int:
                         )
                     if policy_client is not None:
                         policy_actions.append(proposed.copy())
+                        policy_model_raw_actions.append(proposed_model_raw.copy())
                         policy_raw_actions.append(proposed_raw.copy())
                         dls_reference_actions.append(reference_raw.copy())
                         correction_actions.append(correction.copy())
@@ -895,9 +1093,7 @@ def main() -> int:
                     if step % 40 == 0:
                         eef_pos = teacher._eef()[0][0].detach().cpu().tolist()
                         fixed = (
-                            None
-                            if teacher.fixed_target is None
-                            else teacher.fixed_target[0].detach().cpu().tolist()
+                            None if teacher.fixed_target is None else teacher.fixed_target[0].detach().cpu().tolist()
                         )
                         print(
                             f"  step={step} phase={teacher.phase.name} drawer={teacher._drawer_pos():.3f} "
@@ -921,6 +1117,7 @@ def main() -> int:
                         {
                             "hero_cam": np.asarray(hero_frames),
                             "policy_actions": np.asarray(policy_actions, dtype=np.float32),
+                            "policy_model_raw_actions": np.asarray(policy_model_raw_actions, dtype=np.float32),
                             "policy_raw_actions": np.asarray(policy_raw_actions, dtype=np.float32),
                             "dls_reference_actions": np.asarray(dls_reference_actions, dtype=np.float32),
                             "correction_actions": np.asarray(correction_actions, dtype=np.float32),
@@ -929,12 +1126,38 @@ def main() -> int:
                             "prompts": policy_prompts,
                             "mean_infer_ms": float(np.mean(policy_latencies)),
                             "inference_calls": len(policy_latencies),
+                            "ensemble_samples": args_cli.policy_ensemble_samples,
+                            "policy_name": policy_metadata["policy"],
+                            "checkpoint_sha256": policy_metadata["checkpoint_sha256"],
                         }
                     )
                 print(f"SUCCESS {successes}/{args_cli.num_demos} in {step + 1} steps", flush=True)
             else:
                 print(f"FAILED: {teacher.last_reason or teacher.phase.name}", flush=True)
+                if args_cli.dagger_dataset_file and policy_client is not None:
+                    save_dagger_failure(
+                        args_cli.dagger_dataset_file,
+                        table_images=dagger_table_images,
+                        wrist_images=dagger_wrist_images,
+                        joint_positions=dagger_joint_positions,
+                        joint_velocities=dagger_joint_velocities,
+                        teacher_actions=dagger_teacher_actions,
+                        model_raw_actions=policy_model_raw_actions,
+                        executed_actions=executed_actions,
+                        correction_actions=correction_actions,
+                        phases=phase_trace,
+                        prompts=policy_prompts,
+                        checkpoint_sha256=str(policy_metadata["checkpoint_sha256"]),
+                        reason=teacher.last_reason or teacher.phase.name,
+                    )
                 if policy_actions:
+                    model_motion = float(np.linalg.norm(np.asarray(policy_raw_actions)[:, :6], axis=1).sum())
+                    correction_motion = float(np.linalg.norm(np.asarray(correction_actions)[:, :6], axis=1).sum())
+                    print(
+                        "  diagnostic_model_motion_fraction="
+                        f"{model_motion / max(model_motion + correction_motion, 1e-8):.3f}",
+                        flush=True,
+                    )
                     for skill_name in dict.fromkeys(policy_skills):
                         mask = np.asarray(policy_skills) == skill_name
                         proposed_skill = np.asarray(policy_raw_actions)[mask]
@@ -947,7 +1170,8 @@ def main() -> int:
                             f"policy_close_fraction={float(np.mean(proposed_skill[:, 6] < 0)):.3f} "
                             f"teacher_close_fraction={float(np.mean(reference_skill[:, 6] < 0)):.3f} "
                             f"executed_close_fraction={float(np.mean(executed_skill[:, 6] < 0)):.3f} "
-                            f"mean_correction_norm={float(np.mean(np.linalg.norm(correction_skill[:, :6], axis=1))):.3f}",
+                            f"mean_correction_norm="
+                            f"{float(np.mean(np.linalg.norm(correction_skill[:, :6], axis=1))):.3f}",
                             flush=True,
                         )
                     for phase_name in ("HANDLE_CLOSE", "DRAWER_PULL"):

@@ -9,9 +9,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 from lerobot.common.datasets.lerobot_dataset import HF_LEROBOT_HOME, LeRobotDataset
-
 from vla_tidybench.data.isaac_hdf5 import ACTION_DIM, STATE_DIM, load_episode, sorted_episode_names
-
 
 PROMPTS = {
     "open": "open the top drawer",
@@ -96,7 +94,7 @@ def main() -> None:
                     )
                 dataset.save_episode()
                 counts[skill] += 1
-                print(f"{path.name}::{name} {skill} {stop-start} frames", flush=True)
+                print(f"{path.name}::{name} {skill} {stop - start} frames", flush=True)
     print(f"saved {counts} to {output}")
 
 

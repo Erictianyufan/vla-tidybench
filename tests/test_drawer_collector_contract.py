@@ -69,13 +69,13 @@ def test_home_tabletop_full_shifts_placement_and_preserves_policy_priority() -> 
 def test_home_tabletop_uses_portable_textured_floor() -> None:
     text = _source(ENV_CFG).split("class TidyBenchHomeTablePickEnvCfg", 1)[1]
     assert "self.scene.room = None" in text
-    assert 'setattr(self.scene, prop, None)' in text
-    assert 'home_oak_floor.usda' in text
-    assert 'floor_board_joint_' not in text
+    assert "setattr(self.scene, prop, None)" in text
+    assert "home_oak_floor.usda" in text
+    assert "floor_board_joint_" not in text
     floor = HOME_FLOOR.read_text(encoding="utf-8")
     assert 'defaultPrim = "OakFloor"' in floor
-    assert 'UsdUVTexture' in floor
-    assert '@./home_oak_floor.png@' in floor
+    assert "UsdUVTexture" in floor
+    assert "@./home_oak_floor.png@" in floor
     assert HOME_FLOOR_TEXTURE.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 
@@ -83,7 +83,12 @@ def test_handle_phases_have_bounded_failure_timeouts() -> None:
     text = _source(COLLECTOR)
     assert "handle approach did not converge within 180 steps" in text
     assert "handle alignment did not converge within 120 steps" in text
-    assert "base_action = teacher.action()\n                    if teacher.phase is Phase.FAILED:\n                        break" in text
+    assert (
+        "base_action = teacher.action()\n"
+        "                    if teacher.phase is Phase.FAILED:\n"
+        "                        break"
+        in text
+    )
 
 
 def test_handle_prompt_router_is_explicit_and_auditable() -> None:

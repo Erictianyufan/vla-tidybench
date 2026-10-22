@@ -13,10 +13,8 @@ from pathlib import Path
 
 import h5py
 import numpy as np
-
 from vla_tidybench.data.isaac_hdf5 import load_episode, sorted_episode_names
 from vla_tidybench.policy_bridge.websocket_client import PolicyClient
-
 
 PROMPTS = {
     "open": "open the top drawer",
