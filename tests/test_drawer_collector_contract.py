@@ -77,3 +77,9 @@ def test_home_tabletop_uses_portable_textured_floor() -> None:
     assert 'UsdUVTexture' in floor
     assert '@./home_oak_floor.png@' in floor
     assert HOME_FLOOR_TEXTURE.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_handle_phases_have_bounded_failure_timeouts() -> None:
+    text = _source(COLLECTOR)
+    assert "handle approach did not converge within 180 steps" in text
+    assert "handle alignment did not converge within 120 steps" in text

@@ -281,6 +281,10 @@ class DrawerTeacher:
             return self._hold(1.0)
 
         if self.phase is Phase.HANDLE_APPROACH:
+            if self.phase_steps > 180:
+                self.last_reason = "handle approach did not converge within 180 steps"
+                self._set_phase(Phase.FAILED)
+                return self._hold(1.0)
             target = handle.clone()
             target[:, 0] -= 0.10
             action = self._pose_action(target, self.handle_quat, 1.0, pos_threshold=0.015)
@@ -289,6 +293,10 @@ class DrawerTeacher:
             return action
 
         if self.phase is Phase.HANDLE_ALIGN:
+            if self.phase_steps > 120:
+                self.last_reason = "handle alignment did not converge within 120 steps"
+                self._set_phase(Phase.FAILED)
+                return self._hold(1.0)
             target = handle.clone()
             target[:, 0] -= 0.008
             action = self._pose_action(target, self.handle_quat, 1.0, pos_threshold=0.008, rot_threshold=0.10)
