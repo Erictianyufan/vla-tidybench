@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 dependencies = ["msgpack>=1.0.5", "numpy>=1.26", "websockets>=11"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.9"]
+dev = ["h5py>=3.11", "pytest>=8", "ruff>=0.9"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["source/vla_tidybench"]

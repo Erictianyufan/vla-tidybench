@@ -256,7 +256,7 @@ class TidyBenchDrawerShowcaseEnvCfg(TidyBenchDrawerEnvCfg):
 
 @configclass
 class TidyBenchHomeTablePickEnvCfg(TidyBenchDrawerShowcaseEnvCfg):
-    """Home-study tabletop variant for an audited PICK-only demonstration.
+    """Home-study tabletop variant for PICK and continuous full-task demos.
 
     The complete robot/cabinet/object workspace is raised together by 0.75 m,
     retaining the trained task's relative geometry. A kinematic tabletop is
@@ -272,9 +272,12 @@ class TidyBenchHomeTablePickEnvCfg(TidyBenchDrawerShowcaseEnvCfg):
         self.scene.cabinet.init_state.pos = (0.95, 0.0, 0.4 + z)
         self.scene.target_object.init_state.pos = (0.20, -0.20, 0.066 + z)
         self.scene.table_cam.offset.pos = (1.55, -0.85, 1.15 + z)
-        # The original Simple_Room has a dark tiled floor. Replace it with a
-        # deliberately simple warm home-study set, not a fake image backdrop.
+        # Avoid the Isaac 4.5 Simple_Room and YCB asset paths inherited from
+        # Showcase: the pinned runtime is Isaac Sim 6.0.1. All home decor is
+        # local/procedural, so the scene remains portable across cloud images.
         self.scene.room = None
+        for prop in ("banana", "bowl", "mug", "mustard_bottle", "cracker_box"):
+            setattr(self.scene, prop, None)
 
         def box(name, size, pos, color, *, collision=False):
             setattr(
@@ -302,14 +305,14 @@ class TidyBenchHomeTablePickEnvCfg(TidyBenchDrawerShowcaseEnvCfg):
                     (x, y, (z - 0.08) / 2),
                     (0.40, 0.24, 0.13),
                 )
-        # Keep the visual floor slightly above the default ground plane so
-        # its oak finish, rather than the black physics grid, is visible.
-        box("oak_floor", (7.0, 7.0, 0.025), (0.0, 0.0, 0.025), (0.70, 0.58, 0.43))
-        # Subtle timber board joints and a woven rug give the floor domestic
-        # scale without reintroducing the original high-contrast physics grid.
-        for index in range(16):
-            y = -2.65 + index * 0.36
-            box(f"floor_board_joint_{index:02d}", (6.8, 0.006, 0.003), (0.0, y, 0.039), (0.54, 0.43, 0.31))
+        # A textured, visual-only USD plane masks the physics grid. Board
+        # seams and grain are in the albedo asset rather than fake long boxes.
+        project_root = Path(__file__).resolve().parents[3]
+        self.scene.oak_floor = AssetBaseCfg(
+            prim_path="{ENV_REGEX_NS}/Home/OakFloor",
+            spawn=sim_utils.UsdFileCfg(usd_path=str(project_root / "assets" / "home_oak_floor.usda")),
+        )
+        # Soft furniture-scale context stays away from the manipulation path.
         box("woven_rug", (1.70, 1.35, 0.006), (-1.25, -1.15, 0.045), (0.38, 0.52, 0.52))
         box("rug_border_front", (1.58, 0.025, 0.003), (-1.25, -1.76, 0.050), (0.72, 0.69, 0.55))
         box("rug_border_back", (1.58, 0.025, 0.003), (-1.25, -0.54, 0.050), (0.72, 0.69, 0.55))

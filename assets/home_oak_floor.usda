@@ -1,0 +1,59 @@
+#usda 1.0
+(
+    defaultPrim = "OakFloor"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+# Visual-only floor surface. Physics remains on the existing ground plane;
+# keeping the timber a little above it hides Isaac's checkerboard grid.
+def Xform "OakFloor"
+{
+    def Mesh "Surface" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-3.5, -3.5, 0.039), (3.5, -3.5, 0.039), (3.5, 3.5, 0.039), (-3.5, 3.5, 0.039)]
+        normal3f[] normals = [(0, 0, 1)] (interpolation = "constant")
+        texCoord2f[] primvars:st = [(0, 0), (4, 0), (4, 4), (0, 4)] (interpolation = "vertex")
+        rel material:binding = </OakFloor/Looks/Oak>
+        uniform token subdivisionScheme = "none"
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Oak"
+        {
+            token outputs:surface.connect = </OakFloor/Looks/Oak/PBR.outputs:surface>
+
+            def Shader "PBR"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </OakFloor/Looks/Oak/Texture.outputs:rgb>
+                float inputs:roughness = 0.73
+                float inputs:metallic = 0
+                token outputs:surface
+            }
+
+            def Shader "Texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @./home_oak_floor.png@
+                token inputs:sourceColorSpace = "sRGB"
+                float2 inputs:st.connect = </OakFloor/Looks/Oak/TexCoord.outputs:result>
+                token inputs:wrapS = "repeat"
+                token inputs:wrapT = "repeat"
+                float3 outputs:rgb
+            }
+
+            def Shader "TexCoord"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                token inputs:varname = "st"
+                float2 outputs:result
+            }
+        }
+    }
+}

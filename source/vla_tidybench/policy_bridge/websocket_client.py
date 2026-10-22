@@ -18,7 +18,12 @@ class PolicyClient:
             raise ValueError("timeout_s must be positive")
         uri = host if host.startswith("ws://") or host.startswith("wss://") else f"ws://{host}:{port}"
         self._connection = websockets.sync.client.connect(
-            uri, compression=None, max_size=None, open_timeout=timeout_s, close_timeout=timeout_s
+            uri,
+            compression=None,
+            max_size=None,
+            open_timeout=timeout_s,
+            close_timeout=timeout_s,
+            ping_interval=None,
         )
         metadata = self._connection.recv(timeout=timeout_s)
         if isinstance(metadata, str):

@@ -60,7 +60,7 @@ def canonical_actions(raw_actions: NDArray[np.generic]) -> NDArray[np.float32]:
 
 
 def deployable_state(joint_pos: NDArray[np.generic], joint_vel: NDArray[np.generic]) -> NDArray[np.float32]:
-    """Build the 18D deployable state without simulator object truth."""
+    """Build the 18D state from recorded *relative* joint positions/velocities."""
 
     position = np.asarray(joint_pos, dtype=np.float32)
     velocity = np.asarray(joint_vel, dtype=np.float32)
@@ -72,6 +72,32 @@ def deployable_state(joint_pos: NDArray[np.generic], joint_vel: NDArray[np.gener
     if state.shape[1] != STATE_DIM or not np.isfinite(state).all():
         raise ValueError("state is malformed or contains NaN/infinity")
     return state
+
+
+def relative_deployable_state(
+    joint_pos: NDArray[np.generic],
+    joint_vel: NDArray[np.generic],
+    default_joint_pos: NDArray[np.generic],
+    default_joint_vel: NDArray[np.generic],
+) -> NDArray[np.float32]:
+    """Match Isaac's ``joint_pos_rel``/``joint_vel_rel`` online observation terms.
+
+    Raw articulation state is absolute. Expert HDF5 observations are relative
+    to the robot's configured defaults; using raw state at inference creates a
+    large train/deploy mismatch, especially for the two gripper joints.
+    """
+
+    arrays = tuple(
+        np.asarray(value, dtype=np.float32)
+        for value in (joint_pos, joint_vel, default_joint_pos, default_joint_vel)
+    )
+    if any(value.shape != (9,) or not np.isfinite(value).all() for value in arrays):
+        raise ValueError("absolute and default joint states must be finite (9,) vectors")
+    position, velocity, default_position, default_velocity = arrays
+    return deployable_state(
+        (position - default_position)[None, :],
+        (velocity - default_velocity)[None, :],
+    )[0]
 
 
 def load_episode(path: Path, episode_name: str) -> EpisodeArrays:

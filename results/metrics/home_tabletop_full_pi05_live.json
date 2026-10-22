@@ -1,0 +1,53 @@
+{
+  "status": "validated_single_successful_simulation_episode",
+  "date_local": "2026-10-23",
+  "task": "home tabletop OPEN -> PICK -> PLACE -> CLOSE",
+  "scene": "Isaac Sim 6.0.1 / Isaac Lab 3.0.0-beta2, physical wooden table and oak-look home floor",
+  "robot": "Franka Panda",
+  "attempts": 3,
+  "successful_attempt": 3,
+  "successful_episodes_in_recording": 1,
+  "continuous_control_steps": 425,
+  "skill_resets_or_video_splices": 0,
+  "checkpoint": {
+    "training_mode": "pi0.5 action-expert fine-tune",
+    "experiment": "home_relative_release_expert_1001_vm20261023j",
+    "final_step": 1000,
+    "sha256_tree_v1": "2308fdd23d3dfc9c0ba52019e874d4b2d00c836a1e325c3e459ed83bd8930b0d",
+    "training_dataset": "scuee_user06/vla_tidybench_home_relative_release_vm20261023",
+    "training_dataset_sha256_tree_v1": "671389aa572354c61ff0e6b8e7817ffe77b2b661b910ee652d9516d161bc7b85",
+    "training_completion": "home_relative_release_training_completion.json",
+    "dataset_provenance": "home_relative_release_dataset_provenance.json"
+  },
+  "policy_audit": {
+    "result": "pass",
+    "control_mode": "policy_first",
+    "observation_state": "18D joint_pos_rel + joint_vel_rel",
+    "inference_calls": 108,
+    "replan_every_control_steps": 4,
+    "mean_inference_ms": 126.34418487013372,
+    "model_motion_fraction": 0.7860234175214733,
+    "dls_correction_mode": "skill_router",
+    "dls_correction_limit": 0.2,
+    "max_observed_dls_correction_norm": 0.20000001788139343,
+    "gripper_source": "model-only temporal confirmation close=6 open=4",
+    "gripper_filtered_frames": 39,
+    "truth_guided_stage_router_and_dls": true,
+    "pure_vision_only_autonomy": false
+  },
+  "physical_success_check": "drawer joint <= 0.04 m and object center within the drawer volume after placement",
+  "artifacts": {
+    "video": "../../docs/media/home-tabletop-full-pi05-live.mp4",
+    "video_sha256": "72d1e33073c5127d2ad0c675ee0029052ecd22fea7e908a6dce5639407ea3b26",
+    "video_bytes": 1525026,
+    "video_duration_seconds": 21.25,
+    "video_fps": 20,
+    "video_resolution": "1280x720",
+    "preview": "../../docs/media/home-tabletop-full-pi05-live.gif",
+    "preview_sha256": "ed137652c1df90b15b16779ede166c339ba56d284a9e787d4535106e8940852f",
+    "raw_hdf5_release_asset": "home-tabletop-full-pi05-live.hdf5",
+    "raw_hdf5_sha256": "2e45486ddedc61f40af9ef453b8ac5bd609e1021b3855c8fad25f9aec0a3da0b",
+    "raw_hdf5_bytes": 232526510
+  },
+  "limitations": "One successful stochastic simulation episode, not a measured success rate or a physical robot demonstration. The stage router and bounded DLS correction use simulator truth."
+}

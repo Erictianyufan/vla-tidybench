@@ -13,6 +13,17 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 
+def _stage_from_teacher_phase(phase: str) -> str:
+    """Show the executed stage when a teacher preview has no policy-skill trace."""
+    if phase == "SETTLE" or phase.startswith("HANDLE_") or phase == "DRAWER_PULL":
+        return "OPEN"
+    if phase.startswith("PICK_"):
+        return "PICK"
+    if phase.startswith("PLACE_"):
+        return "PLACE"
+    return "CLOSE"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("recording", type=Path)
@@ -29,6 +40,9 @@ def main() -> None:
             policy = str(recording.attrs["policy"])
             prompt = str(recording.attrs["prompt"])
             mean_infer = float(recording.attrs["mean_infer_ms"])
+            scene_variant = str(recording.attrs.get("scene_variant", "original_drawer"))
+            control_mode = str(recording.attrs.get("control_mode", ""))
+            correction_limit = float(recording.attrs.get("dls_max_correction_norm", 0.0))
             prompt_key, skill_key = "prompts", "skills"
         else:
             data = source["data"]
@@ -40,7 +54,12 @@ def main() -> None:
             policy = str(recording.attrs.get("policy", "scripted_truth_teacher"))
             prompt = str(recording.attrs.get("language_instruction", data.attrs.get("language_instruction", "")))
             mean_infer = float(recording.attrs.get("mean_infer_ms", -1.0))
+            scene_variant = str(recording.attrs.get("scene_variant", data.attrs.get("scene_variant", "")))
+            control_mode = str(recording.attrs.get("control_mode", ""))
+            correction_limit = float(recording.attrs.get("dls_max_correction_norm", 0.0))
             prompt_key, skill_key = "policy_prompts", "policy_skills"
+        policy_raw = np.asarray(recording["policy_raw_actions"]) if "policy_raw_actions" in recording else None
+        correction = np.asarray(recording["correction_actions"]) if "correction_actions" in recording else None
         prompts = (
             [value.decode("utf-8") if isinstance(value, bytes) else str(value) for value in recording[prompt_key]]
             if prompt_key in recording
@@ -49,6 +68,11 @@ def main() -> None:
         skills = (
             [value.decode("utf-8") if isinstance(value, bytes) else str(value) for value in recording[skill_key]]
             if skill_key in recording
+            else None
+        )
+        teacher_phases = (
+            [value.decode("utf-8") if isinstance(value, bytes) else str(value) for value in recording["teacher_phase"]]
+            if "teacher_phase" in recording
             else None
         )
     font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
@@ -63,14 +87,24 @@ def main() -> None:
         canvas.paste(table_image, (815, 455))
         canvas.paste(wrist_image, (1045, 455))
         draw = ImageDraw.Draw(canvas)
-        is_home_tabletop = policy == "scripted-truth-teacher-home-tabletop"
+        is_home_tabletop = scene_variant.startswith("home_tabletop")
+        is_home_full = scene_variant == "home_tabletop_full"
         draw.rectangle((0, 0, 1280, 105 if is_home_tabletop else 72), fill=(12, 18, 28))
         frame_prompt = prompts[index] if prompts else prompt
-        frame_skill = skills[index].upper() if skills else ""
+        if skills:
+            frame_skill = skills[index].upper()
+        elif teacher_phases:
+            frame_skill = _stage_from_teacher_phase(teacher_phases[index])
+        else:
+            frame_skill = ""
         is_preview = policy == "scripted-teacher-camera-preview"
         is_recovery = "dls-contact-recovery" in policy
         is_continuous = "continuous-recovery" in policy or "live-recovery" in policy
-        if is_home_tabletop:
+        if is_home_full and control_mode == "policy_first":
+            heading = "VLA-TidyBench | Home tabletop pi0.5-primary long task"
+        elif is_home_full:
+            heading = "VLA-TidyBench | Home tabletop long-task validation"
+        elif is_home_tabletop:
             heading = "VLA-TidyBench | Home tabletop grasp"
         elif is_continuous:
             heading = "VLA-TidyBench | Continuous pi0.5-assisted inference"
@@ -82,20 +116,28 @@ def main() -> None:
             heading = "VLA-TidyBench | Real pi0.5 LoRA closed loop"
         draw.text((22, 10), heading, font=font, fill=(96, 216, 255))
         draw.text((22, 42), f'Prompt: "{frame_prompt}"', font=small, fill="white")
-        if is_continuous:
+        if (is_continuous or is_home_full) and frame_skill:
             draw.rounded_rectangle((850, 8, 980, 58), radius=10, fill=(25, 105, 145))
             draw.text((878, 20), frame_skill, font=font, fill="white")
+        show_success = success and (not is_home_full or index >= len(hero) - args.fps)
         draw.text(
             (1000, 16),
-            "SUCCESS" if success else "ATTEMPT",
+            "SUCCESS" if show_success else "RUNNING",
             font=font,
-            fill=(80, 230, 130) if success else (255, 190, 80),
+            fill=(80, 230, 130) if show_success else (255, 190, 80),
         )
         draw.rectangle((811, 451, 1039, 679), outline=(96, 216, 255), width=3)
         draw.rectangle((1041, 451, 1269, 679), outline=(96, 216, 255), width=3)
         draw.text((820, 680), "table camera", font=small, fill="white")
         draw.text((1050, 680), "wrist camera", font=small, fill="white")
-        if is_home_tabletop:
+        if is_home_full and control_mode == "policy_first":
+            model_norm = float(np.linalg.norm(policy_raw[index, :6])) if policy_raw is not None else 0.0
+            correction_norm = float(np.linalg.norm(correction[index, :6])) if correction is not None else 0.0
+            footer = (
+                f"pi0.5 action {model_norm:.2f} | bounded DLS correction {correction_norm:.2f} "
+                f"(limit {correction_limit:.2f}) | inference ~{mean_infer:.0f} ms"
+            )
+        elif is_home_tabletop:
             footer = "Scripted truth-guided DLS teacher | three synchronized Isaac cameras"
         elif is_continuous:
             footer = f"warm inference ~{mean_infer:.0f} ms | pi0.5 + DLS recovery"
