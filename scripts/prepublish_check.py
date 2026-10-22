@@ -14,6 +14,8 @@ MAX_TRACKED_BYTES = 25 * 1024 * 1024
 MAX_PREVIEW_BYTES = 10 * 1024 * 1024
 
 ALLOWED_DEMO_VIDEOS = {
+    Path("docs/media/home-tabletop-full-pi05-live.mp4"),
+    Path("docs/media/home-tabletop-full-teacher-wood-preview.mp4"),
     Path("docs/media/home-tabletop-pick.mp4"),
     Path("docs/media/pi05-continuous-medicine-demo.mp4"),
     Path("docs/media/pi05-dls-recovery-open-success.mp4"),

@@ -39,6 +39,7 @@ results/metrics/*.jsonl
 !docs/media/pick-residual-sac-demo.mp4
 !docs/media/pi05-continuous-medicine-demo.mp4
 !docs/media/home-tabletop-full-pi05-live.mp4
+!docs/media/home-tabletop-full-teacher-wood-preview.mp4
 
 # Credentials and host-specific access material.
 *.pem
