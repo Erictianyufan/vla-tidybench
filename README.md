@@ -31,6 +31,10 @@ VLA-TidyBench 是一个面向具身智能工程实践的仿真项目：在 Isaac
 
 ## 系统架构
 
+![家庭桌面 π0.5 在线闭环推理、训练数据与单条成功轨迹示意图](docs/media/vla-tidybench-home-pi05-live-pipeline-v2.png)
+
+上图依据[已验证的在线推理轨迹](results/metrics/home_tabletop_full_pi05_live.json)更新；其中机器人画面为示意，真实录制帧请看[三机位 MP4](docs/media/home-tabletop-full-pi05-live.mp4)及下方四阶段截图。阶段路由与有界 DLS 修正使用仿真真值，不能据此宣称纯视觉自主或真机成功。
+
 ```mermaid
 flowchart LR
     A["Isaac Sim / Isaac Lab"] --> B["Truth FSM + DLS IK"]
